@@ -1,0 +1,67 @@
+name: cusaxs
+channels:
+  - conda-forge
+  - nvidia
+  - defaults
+dependencies:
+  # Core dependencies
+  - python=3.10
+  - cmake=3.24
+  - ninja
+  - pybind11
+  - pkg-config
+  
+  # CUDA and GPU computing
+  - cudatoolkit=11.8
+  - cudatoolkit-dev=11.8
+  
+
+  # Scientific computing
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  
+  # Molecular dynamics tools
+  - gromacs  # For trajectory handling utilities
+  - mdanalysis
+  - mdtraj
+  
+  # GUI dependencies (optional)
+  - qt=6.5
+  - pyqt=5.15
+  
+  # Development tools
+  - pytest
+  - pytest-cov
+  - black
+  - flake8
+  - mypy
+  
+  # Documentation
+  - sphinx
+  - sphinx-rtd-theme
+  
+  # Optional analysis tools
+  - jupyter
+  - ipython
+  - seaborn
+  
+  # Build tools
+  - make
+  - gcc_linux-64=9
+  - gxx_linux-64=9
+  
+  # OpenMP
+  - openmp
+  
+  # Additional scientific libraries
+  - h5py
+  - netcdf4
+  - xarray
+
+  # pip dependencies not available in conda
+  - pip
+  - pip:
+    - pre-commit
+    - cuda-python  # For advanced CUDA Python bindings

@@ -1,0 +1,198 @@
+# Build directories
+build/
+Build/
+BUILD/
+build-*/
+cmake-build-*/
+bin/
+Release/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!cmake/
+CPack*.cmake
+CTestTestfile.cmake
+FMT.build
+fmt-*.cmake
+fmt.pc
+install_manifest.txt
+Testing/
+_CPack_Packages/
+
+# Compilation outputs
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so*
+*.dylib
+*.dll
+*.exe
+*.slo
+*.lo
+*.lai
+*.la
+
+# CUDA compilation files
+*.cubin
+*.fatbin
+*.ptx
+*.cu.o
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Fortran module files
+*.mod
+
+# IDE files
+.vscode/
+.vs/
+*.vcxproj*
+*.sln
+*.suo
+*.user
+.idea/
+*.iml
+*.ipr
+*.iws
+*.xcodeproj
+.pydevproject
+.settings/
+
+# Qt files
+*.pro.user
+*.pro.user.*
+ui_*.h
+moc_*.cpp
+qrc_*.cpp
+
+# Python files
+__pycache__/
+*.py[cod]
+*.pyc
+*.*.pyc
+*$py.class
+.Python
+env/
+venv/
+.venv
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+python/openTRJ.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+*.swp
+*.swo
+.cache
+
+# Log files
+*.log
+*.out
+*.err
+config_old.log
+
+# Data files (typically large)
+/data/
+*.tpr
+*.xtc
+*.trr
+*.gro
+*.pdb
+*.dcd
+*.h5
+*.nc
+*.dat
+*.txt
+!README.txt
+!LICENSE.txt
+
+# Output files
+saxs_output*
+histogram*
+parameters*
+timing*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+
+# Documentation build
+docs/_build/
+docs/build/
+site/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Conda
+.conda/
+
+# Backup files
+*.bak
+*.backup
+
+# Local configuration
+local_config.json
+user_settings.json
+
+# Test outputs
+test_output/
+test_results/
+
+# Performance profiling
+*.nvprof
+*.nsys-rep
+*.qdrep
+
+# Core dumps
+core
+core.*
+
+# Editor temporary files
+.#*
+#*#
+
+# Build system files
+/config.guess
+/config.status
+/config.sub
+/configure
+/libtool
+/ltmain.sh
+/missing
+/src/.deps
+*.Po
+build-seq/CMakeFiles/CMakeDirectoryInformation.cmake
