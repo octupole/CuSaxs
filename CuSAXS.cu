@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     // Add optional option grid size
     app.add_option("--dt ", dt, "Read two frames every dt");
 
-    // Add optional option grid size
+        // Add optional option grid size
     app.add_option("--order ", Options::order, "BSpline order");
 
     // Add optional option grid size
