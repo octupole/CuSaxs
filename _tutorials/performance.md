@@ -277,6 +277,6 @@ sudo pkill -f cuda
 
 ## Next Steps
 
-- [Water Models Tutorial](water-models) - System-specific corrections
-- [Python Analysis](python-analysis) - Process your optimized results
-- [Command Line Reference](../api/command-line) - Advanced parameter options
+- [Water Models Tutorial](/tutorials/water-models/) - System-specific corrections
+- [Python Analysis](/tutorials/python-analysis/) - Process your optimized results
+- [Command Line Reference](/api/command-line/) - Advanced parameter options

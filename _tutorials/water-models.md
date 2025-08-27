@@ -261,6 +261,6 @@ Water model corrections add minimal computational cost (~1-2% overhead).
 
 ## Next Steps
 
-- [Ion Corrections Tutorial](ion-corrections) - Handle ionic solutions
-- [Python Analysis](python-analysis) - Compare water model effects  
-- [Performance Optimization](performance) - Efficient water calculations
+- [Ion Corrections Tutorial](/tutorials/ion-corrections/) - Handle ionic solutions
+- [Python Analysis](/tutorials/python-analysis/) - Compare water model effects  
+- [Performance Optimization](/tutorials/performance/) - Efficient water calculations

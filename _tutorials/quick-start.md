@@ -46,6 +46,6 @@ CuSAXS creates these files:
 
 ## Next Steps
 
-- [Understanding Parameters](parameters.html)
-- [GUI Tutorial](gui-tutorial.html)
-- [Performance Optimization](performance.html)
+- [Understanding Parameters](/tutorials/parameters/)
+- [GUI Tutorial](/tutorials/gui-tutorial/)
+- [Performance Optimization](/tutorials/performance/)

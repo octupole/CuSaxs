@@ -80,18 +80,18 @@ How to validate your results against known systems and experimental data.
 
 Before starting these tutorials, make sure you have:
 
-1. **CuSAXS installed** - Follow the [installation guide](../about.html#installation)
-2. **CUDA-capable GPU** - Check requirements in [system requirements](../about.html#system-requirements)  
+1. **CuSAXS installed** - Follow the [installation guide](/about#installation)
+2. **CUDA-capable GPU** - Check requirements in [system requirements](/about#system-requirements)  
 3. **Sample data** - Download tutorial datasets from [GitHub releases](https://github.com/your-username/CuSAXS/releases)
 4. **Basic MD knowledge** - Familiarity with molecular dynamics concepts is helpful
 
 ## Getting Help
 
 If you get stuck:
-- Check the [troubleshooting section](troubleshooting.html)
+- Check the [troubleshooting section](/tutorials/troubleshooting/)
 - Search [existing issues](https://github.com/your-username/CuSAXS/issues)
 - Ask questions in [discussions](https://github.com/your-username/CuSAXS/discussions)
 
 ## Contributing Tutorials
 
-Have a useful workflow or analysis method? We welcome tutorial contributions! See our [contributing guide](../about.html#contributing) for details.
+Have a useful workflow or analysis method? We welcome tutorial contributions! See our [contributing guide](/about#contributing) for details.

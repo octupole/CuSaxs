@@ -182,6 +182,6 @@ The GUI generates equivalent command-line arguments:
 
 ## Next Steps
 
-- [Command Line Interface](command-line) - Move to production workflows
-- [Performance Optimization](performance) - Maximize efficiency  
-- [Python Analysis](python-analysis) - Process your results
+- [Command Line Interface](/tutorials/command-line/) - Move to production workflows
+- [Performance Optimization](/tutorials/performance/) - Maximize efficiency  
+- [Python Analysis](/tutorials/python-analysis/) - Process your results

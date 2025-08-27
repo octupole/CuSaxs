@@ -394,7 +394,7 @@ def calculate_chi_squared(sim_file, exp_file, q_range=None):
 
 ## Next Steps
 
-- [Command Line Interface](command-line) - Generate data for analysis
-- [Water Models Tutorial](water-models) - Optimize input parameters
-- [Performance Optimization](performance) - Efficient data generation
-- [API Reference](../api) - Complete parameter reference
+- [Command Line Interface](/tutorials/command-line/) - Generate data for analysis
+- [Water Models Tutorial](/tutorials/water-models/) - Optimize input parameters
+- [Performance Optimization](/tutorials/performance/) - Efficient data generation
+- [API Reference](/api/) - Complete parameter reference
