@@ -71,13 +71,15 @@ jobs:
         with:
           cuda: '11.8.0'
           method: network
-
-      - name: Build with GUI
+      - name: Configure
         run: |
-          mkdir build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=ON
-          make -j$(nproc)
+          rm -rf build
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_GUI=ON
+
+      - name: Build
+        run: cmake --build build --parallel
 
   code-quality:
     runs-on: ubuntu-22.04
