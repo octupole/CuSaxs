@@ -1,5 +1,5 @@
 """
-Optimized trajectory interface for cudaSAXS with improved pybind11 integration.
+Optimized trajectory interface for CuSAXS with improved pybind11 integration.
 This module provides a clean, efficient interface between C++ and Python components.
 """
 

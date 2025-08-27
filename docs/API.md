@@ -294,7 +294,7 @@ frames = traj.read_frames(start=0, end=1000, step=10)
 ### Exception Types
 
 ```cpp
-namespace cudaSAXS {
+namespace CuSAXS {
     class CudaError : public std::exception {
         // CUDA-related errors
     };
@@ -341,7 +341,7 @@ float* d_grid_ptr = thrust::raw_pointer_cast(d_grid.data());
 
 ```cmake
 # Main executable
-add_executable(cudaSAXS cudaSAXS.cu)
+add_executable(CuSAXS CuSAXS.cu)
 
 # Component libraries
 add_library(saxs STATIC saxsKernel.cu saxsDeviceKernels.cu)
@@ -349,7 +349,7 @@ add_library(system STATIC AtomCounter.cpp Cell.cpp)
 add_library(utils STATIC BSpline.cpp Scattering.cpp)
 
 # Link dependencies
-target_link_libraries(cudaSAXS 
+target_link_libraries(CuSAXS 
     saxs system utils 
     ${CUDA_LIBRARIES} cufft cublas 
     fmt::fmt Python3::Python pybind11::module

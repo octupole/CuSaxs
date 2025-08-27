@@ -29,19 +29,19 @@ MainWindow::MainWindow(QWidget *parent)
     connectSignals();
 
     // Load settings
-    QSettings settings("cudaSAXS", "GUI");
+    QSettings settings("CuSAXS", "GUI");
     restoreGeometry(settings.value("geometry").toByteArray());
     restoreState(settings.value("windowState").toByteArray());
 
     // Set executable path (adjust as needed)
-    QString execPath = settings.value("executablePath", "./cudaSAXS").toString();
+    QString execPath = settings.value("executablePath", "./CuSAXS").toString();
     m_processRunner->setExecutablePath(execPath);
 }
 
 MainWindow::~MainWindow()
 {
     // Save settings
-    QSettings settings("cudaSAXS", "GUI");
+    QSettings settings("CuSAXS", "GUI");
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
 
@@ -126,7 +126,7 @@ void MainWindow::onRunRequested()
     QStringList args = options.toCommandLineArgs();
 
     // Log the command
-    ui->outputText->append("Command: cudaSAXS " + args.join(" ") + "\n");
+    ui->outputText->append("Command: CuSAXS " + args.join(" ") + "\n");
     ui->outputText->append(QString(80, '-') + "\n");
 
     // Set working directory to the directory of the trajectory file
@@ -251,7 +251,7 @@ void MainWindow::onNewProject()
     m_projectFile.clear();
     ui->inputForm->resetToDefaults();
     ui->outputText->clear();
-    setWindowTitle("cudaSAXS GUI");
+    setWindowTitle("CuSAXS GUI");
 }
 
 void MainWindow::onOpenProject()
@@ -264,7 +264,7 @@ void MainWindow::onOpenProject()
     }
 
     QString filename = QFileDialog::getOpenFileName(this,
-                                                    "Open Project", QString(), "cudaSAXS Project (*.csp);;All Files (*)");
+                                                    "Open Project", QString(), "CuSAXS Project (*.csp);;All Files (*)");
 
     if (!filename.isEmpty())
     {
@@ -287,7 +287,7 @@ void MainWindow::onSaveProject()
 void MainWindow::onSaveProjectAs()
 {
     QString filename = QFileDialog::getSaveFileName(this,
-                                                    "Save Project", QString(), "cudaSAXS Project (*.csp);;All Files (*)");
+                                                    "Save Project", QString(), "CuSAXS Project (*.csp);;All Files (*)");
 
     if (!filename.isEmpty())
     {
@@ -354,7 +354,7 @@ void MainWindow::loadProject(const QString &filename)
     }
 
     m_projectFile = filename;
-    setWindowTitle(QString("cudaSAXS GUI - %1").arg(QFileInfo(filename).fileName()));
+    setWindowTitle(QString("CuSAXS GUI - %1").arg(QFileInfo(filename).fileName()));
 }
 
 void MainWindow::saveProject(const QString &filename)
@@ -414,15 +414,15 @@ void MainWindow::saveProject(const QString &filename)
     file.write(doc.toJson());
 
     m_projectFile = filename;
-    setWindowTitle(QString("cudaSAXS GUI - %1").arg(QFileInfo(filename).fileName()));
+    setWindowTitle(QString("CuSAXS GUI - %1").arg(QFileInfo(filename).fileName()));
     m_statusLabel->setText("Project saved");
 }
 
 void MainWindow::onAbout()
 {
-    QMessageBox::about(this, "About cudaSAXS GUI",
-                       "<h3>cudaSAXS GUI</h3>"
-                       "<p>A graphical interface for cudaSAXS - GPU-accelerated SAXS calculations</p>"
+    QMessageBox::about(this, "About CuSAXS GUI",
+                       "<h3>CuSAXS GUI</h3>"
+                       "<p>A graphical interface for CuSAXS - GPU-accelerated SAXS calculations</p>"
                        "<p>This interface provides an easy way to configure and run SAXS calculations "
                        "on molecular dynamics trajectories using CUDA acceleration.</p>"
                        "<p>Version 1.0</p>");
@@ -430,11 +430,11 @@ void MainWindow::onAbout()
 
 void MainWindow::onPreferences()
 {
-    QSettings settings("cudaSAXS", "GUI");
+    QSettings settings("CuSAXS", "GUI");
 
-    QString currentPath = settings.value("executablePath", "./cudaSAXS").toString();
+    QString currentPath = settings.value("executablePath", "./CuSAXS").toString();
     QString newPath = QFileDialog::getOpenFileName(this,
-                                                   "Select cudaSAXS Executable", currentPath, "Executable Files (*)");
+                                                   "Select CuSAXS Executable", currentPath, "Executable Files (*)");
 
     if (!newPath.isEmpty())
     {

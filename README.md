@@ -62,7 +62,7 @@ Follow the [official NVIDIA CUDA installation guide](https://developer.nvidia.co
 ### 3. Clone and Build
 
 ```bash
-git clone https://github.com/your-username/CuSAXS.git
+git clone https://github.com/octupole/CuSAXS.git
 cd CuSAXS
 mkdir build && cd build
 
@@ -180,7 +180,7 @@ python pysrc/topology.py system.tpr
 
 ## Output Files
 
-cudaSAXS generates several output files:
+cuSAXS generates several output files:
 
 - `saxs_profile.dat`: SAXS intensity I(q) vs scattering vector q
 - `histogram.dat`: Radial distribution of scattering intensities
@@ -225,7 +225,7 @@ cudaSAXS generates several output files:
 
 ### Getting Help
 
-1. Check the [Issues](https://github.com/your-username/cudaSAXS/issues) page
+1. Check the [Issues](https://github.com/your-username/cuSAXS/issues) page
 2. Verify your system meets the requirements
 3. Enable verbose output for debugging: `./CuSAXS --verbose ...`
 
