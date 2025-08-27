@@ -11,12 +11,12 @@ plugins:
   - jekyll-feed
   - jekyll-sitemap
 
-# Navigation
-header_pages:
-  - index.md
-  - about.md
-  - tutorials.md
-  - api.md
+# Navigation - using custom header instead
+# header_pages:
+#   - index.md
+#   - about.md
+#   - tutorials.md
+#   - api.md
 
 # Collections
 collections:
