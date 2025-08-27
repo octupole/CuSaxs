@@ -2,12 +2,14 @@
 #include "ui_InputForm.h"
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QLabel>
 
 InputForm::InputForm(QWidget *parent)
     : QWidget(parent),
       ui(new Ui::InputForm)
 {
     ui->setupUi(this);
+    setupValidation();
     connectSignals();
     resetToDefaults();
     validateForm();
@@ -83,24 +85,125 @@ void InputForm::onGridTypeChanged(int index)
 
 void InputForm::validateForm()
 {
+    // First run individual widget validation
+    bool allWidgetsValid = true;
+    for (auto& validator : m_validators) {
+        validator->validate(); // This will update UI automatically
+        if (!validator->isValid()) {
+            allWidgetsValid = false;
+        }
+    }
+    
+    // Then run comprehensive form validation
     OptionsData data = getOptionsData();
-    bool isValid = data.isValid();
+    bool isDataValid = data.isValid();
     QString error = data.validationError();
+    QStringList warnings = data.validationWarnings();
 
-    ui->runBtn->setEnabled(isValid);
+    bool isFormValid = allWidgetsValid && isDataValid;
+    ui->runBtn->setEnabled(isFormValid);
 
-    if (isValid)
+    if (isFormValid)
     {
-        ui->statusLabel->setText("Ready to run");
-        ui->statusLabel->setStyleSheet("QLabel { color: green; }");
+        if (warnings.isEmpty()) {
+            ui->statusLabel->setText("✅ Ready to run");
+            ui->statusLabel->setStyleSheet("QLabel { color: green; font-weight: bold; }");
+        } else {
+            ui->statusLabel->setText("⚠️ Ready to run (with warnings)");
+            ui->statusLabel->setStyleSheet("QLabel { color: orange; font-weight: bold; }");
+            ui->statusLabel->setToolTip("Warnings:\n" + warnings.join("\n"));
+        }
     }
     else
     {
-        ui->statusLabel->setText(error);
-        ui->statusLabel->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel->setText("❌ " + error);
+        ui->statusLabel->setStyleSheet("QLabel { color: red; font-weight: bold; }");
+        ui->statusLabel->setToolTip("");
     }
 
-    emit formValidityChanged(isValid);
+    emit formValidityChanged(isFormValid);
+}
+
+void InputForm::setupValidation()
+{
+    // Create error labels for validation feedback (assuming they exist in the UI)
+    // If not in UI file, these could be added programmatically
+    
+    // TPR file validator
+    auto tprValidator = std::make_unique<FileExistsValidator>(QStringList{"tpr"}, true);
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->tprFileEdit, std::move(tprValidator), nullptr, this
+    ));
+    
+    // XTC file validator  
+    auto xtcValidator = std::make_unique<FileExistsValidator>(QStringList{"xtc"}, true, 10LL * 1024 * 1024 * 1024); // 10GB max
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->xtcFileEdit, std::move(xtcValidator), nullptr, this
+    ));
+    
+    // Output file validator
+    auto outputValidator = std::make_unique<OutputFileValidator>();
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->outputFileEdit, std::move(outputValidator), nullptr, this
+    ));
+    
+    // Grid size validators
+    auto gridSingleValidator = std::make_unique<RangeValidator<int>>(8, 512, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->gridSingleSpin, std::move(gridSingleValidator), nullptr, this
+    ));
+    
+    auto gridXValidator = std::make_unique<RangeValidator<int>>(8, 512, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->gridXSpin, std::move(gridXValidator), nullptr, this
+    ));
+    
+    auto gridYValidator = std::make_unique<RangeValidator<int>>(8, 512, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->gridYSpin, std::move(gridYValidator), nullptr, this
+    ));
+    
+    auto gridZValidator = std::make_unique<RangeValidator<int>>(8, 512, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->gridZSpin, std::move(gridZValidator), nullptr, this
+    ));
+    
+    // Frame validators
+    auto startFrameValidator = std::make_unique<RangeValidator<int>>(0, 1000000, "frames");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->startFrameSpin, std::move(startFrameValidator), nullptr, this
+    ));
+    
+    // End frame validator that checks against start frame
+    auto getStartFrame = [this]() { return ui->startFrameSpin->value(); };
+    auto endFrameValidator = std::make_unique<FrameRangeValidator>(getStartFrame, 1000000);
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->endFrameSpin, std::move(endFrameValidator), nullptr, this
+    ));
+    
+    // Frame interval validator
+    auto frameIntervalValidator = std::make_unique<RangeValidator<int>>(1, 1000, "frames");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->frameIntervalSpin, std::move(frameIntervalValidator), nullptr, this
+    ));
+    
+    // Bin size validator
+    auto binSizeValidator = std::make_unique<RangeValidator<double>>(0.001, 1.0, "Å⁻¹");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->binSizeSpin, std::move(binSizeValidator), nullptr, this
+    ));
+    
+    // Q cutoff validator
+    auto qCutoffValidator = std::make_unique<RangeValidator<double>>(0.1, 20.0, "Å⁻¹");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->qCutoffSpin, std::move(qCutoffValidator), nullptr, this
+    ));
+    
+    // Connect validation signals to form validation
+    for (auto& validator : m_validators) {
+        connect(validator.get(), &WidgetValidator::validationChanged,
+                this, &InputForm::validateForm);
+    }
 }
 
 OptionsData InputForm::getOptionsData() const

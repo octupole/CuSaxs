@@ -49,7 +49,7 @@ namespace BSpline
 		spline d = BSpline{}(w);
 
 		vector<float> A0(ndim, 0.0);
-		for (auto o = 1; o < order + 1; o++)
+		for (size_t o = 1; o < order + 1; o++)
 			A0[o] = d.x[o - 1];
 		BSp.x = DFTmod(A0, nx);
 		Gamma(BSp.x);
@@ -70,10 +70,10 @@ namespace BSpline
 	vector<float> BSpmod::DFTmod(const vector<float> &A, size_t Ndim)
 	{
 		vector<float> bsp(Ndim, 0.0);
-		for (auto o = 0; o < Ndim; o++)
+		for (int o = 0; o < static_cast<int>(Ndim); o++)
 		{
 			float sum1 = 0.0, sum2 = 0.0;
-			for (auto p = 0; p < order + 1; p++)
+			for (auto p = 0; p < static_cast<int>(order + 1); p++)
 			{
 				float arg = twopi * static_cast<float>(o * p) / static_cast<float>(Ndim);
 				sum1 += A[p] * cos(arg);
@@ -81,7 +81,7 @@ namespace BSpline
 			}
 			bsp[o] = sum1 * sum1 + sum2 * sum2;
 		}
-		for (auto o = 1; o < Ndim - 1; o++)
+		for (size_t o = 1; o < Ndim - 1; o++)
 			bsp[o] = bsp[o] > tiny ? bsp[o] : 0.5 * (bsp[o - 1] + bsp[o + 1]);
 		return bsp;
 	}
@@ -113,10 +113,10 @@ namespace BSpline
 		};
 
 		int order2 = 2 * order;
-		for (auto k = 0; k < Ndim; k++)
+		for (auto k = 0; k < static_cast<int>(Ndim); k++)
 		{
 			float lambda = 1.0;
-			int m = k < nf ? k : k - Ndim;
+			int m = k < static_cast<int>(nf) ? k : k - static_cast<int>(Ndim);
 			if (m != 0)
 			{
 				float gsum = GammaSum(m, order);

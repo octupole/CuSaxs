@@ -33,6 +33,12 @@ struct OptionsData
     // Validate the data
     bool isValid() const;
     QString validationError() const;
+    
+    // Get validation warnings (non-critical issues)
+    QStringList validationWarnings() const;
+    
+    // Estimate GPU memory usage in GB
+    double estimateMemoryUsage() const;
 };
 
 #endif // OPTIONSDATA_H

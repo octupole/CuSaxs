@@ -29,19 +29,19 @@ MainWindow::MainWindow(QWidget *parent)
     connectSignals();
 
     // Load settings
-    QSettings settings("CuSAXS", "GUI");
+    QSettings settings("cudaSAXS", "GUI");
     restoreGeometry(settings.value("geometry").toByteArray());
     restoreState(settings.value("windowState").toByteArray());
 
     // Set executable path (adjust as needed)
-    QString execPath = settings.value("executablePath", "./CuSAXS").toString();
+    QString execPath = settings.value("executablePath", "./cudaSAXS").toString();
     m_processRunner->setExecutablePath(execPath);
 }
 
 MainWindow::~MainWindow()
 {
     // Save settings
-    QSettings settings("CuSAXS", "GUI");
+    QSettings settings("cudaSAXS", "GUI");
     settings.setValue("geometry", saveGeometry());
     settings.setValue("windowState", saveState());
 

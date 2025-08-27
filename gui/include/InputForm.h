@@ -3,6 +3,8 @@
 
 #include <QWidget>
 #include "OptionsData.h"
+#include "InputValidator.h"
+#include <memory>
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -48,6 +50,10 @@ private:
 
     // Store advanced options
     OptionsData m_advancedOptions;
+    
+    // Validation system
+    void setupValidation();
+    std::vector<std::unique_ptr<WidgetValidator>> m_validators;
 };
 
 #endif // INPUTFORM_H

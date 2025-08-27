@@ -1,17 +1,24 @@
 #include "AdvancedOptionsDialog.h"
 #include "ui_AdvancedOptionsDialog.h"
+#include <QDialogButtonBox>
+#include <QPushButton>
 
 AdvancedOptionsDialog::AdvancedOptionsDialog(QWidget *parent)
     : QDialog(parent),
-      ui(new Ui::AdvancedOptionsDialog)
+      ui(new Ui::AdvancedOptionsDialog),
+      m_isValid(true)
 {
     ui->setupUi(this);
+    setupValidation();
 
     // Note: Most connections are already made in the .ui file:
     // - buttonBox accept/reject to dialog accept/reject
     // - scaledGridCheck toggled to scaledGridWidget setEnabled
     // - waterModelCheck toggled to waterModelWidget setEnabled
     // - scaledGridTypeCombo currentIndexChanged to scaledStackedWidget setCurrentIndex
+    
+    // Connect validation to dialog buttons
+    connect(this, &AdvancedOptionsDialog::finished, this, &AdvancedOptionsDialog::validateForm);
 }
 
 AdvancedOptionsDialog::~AdvancedOptionsDialog()
@@ -88,4 +95,102 @@ OptionsData AdvancedOptionsDialog::getOptionsData() const
     }
 
     return data;
+}
+
+void AdvancedOptionsDialog::setupValidation()
+{
+    // B-spline order validator
+    auto orderValidator = std::make_unique<RangeValidator<int>>(1, 6, "order");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->orderSpin, std::move(orderValidator), nullptr, this
+    ));
+    
+    // Scale factor validator
+    auto scaleValidator = std::make_unique<RangeValidator<double>>(1.1, 10.0, "scaling factor");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->scaleFactorSpin, std::move(scaleValidator), nullptr, this
+    ));
+    
+    // Scaled grid validators
+    auto scaledGridSingleValidator = std::make_unique<RangeValidator<int>>(16, 1024, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->scaledGridSingleSpin, std::move(scaledGridSingleValidator), nullptr, this
+    ));
+    
+    auto scaledGridXValidator = std::make_unique<RangeValidator<int>>(16, 1024, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->scaledGridXSpin, std::move(scaledGridXValidator), nullptr, this
+    ));
+    
+    auto scaledGridYValidator = std::make_unique<RangeValidator<int>>(16, 1024, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->scaledGridYSpin, std::move(scaledGridYValidator), nullptr, this
+    ));
+    
+    auto scaledGridZValidator = std::make_unique<RangeValidator<int>>(16, 1024, "grid points");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->scaledGridZSpin, std::move(scaledGridZValidator), nullptr, this
+    ));
+    
+    // Ion count validators
+    auto sodiumValidator = std::make_unique<RangeValidator<int>>(0, 100000, "atoms");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->sodiumSpin, std::move(sodiumValidator), nullptr, this
+    ));
+    
+    auto chlorineValidator = std::make_unique<RangeValidator<int>>(0, 100000, "atoms");
+    m_validators.push_back(std::make_unique<WidgetValidator>(
+        ui->chlorineSpin, std::move(chlorineValidator), nullptr, this
+    ));
+    
+    // Connect validation signals
+    for (auto& validator : m_validators) {
+        connect(validator.get(), &WidgetValidator::validationChanged,
+                this, &AdvancedOptionsDialog::validateForm);
+    }
+}
+
+void AdvancedOptionsDialog::validateForm()
+{
+    bool allValid = true;
+    for (auto& validator : m_validators) {
+        validator->validate();
+        if (!validator->isValid()) {
+            allValid = false;
+        }
+    }
+    
+    m_isValid = allValid;
+    
+    // Enable/disable OK button based on validation
+    if (ui->buttonBox) {
+        ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(m_isValid);
+    }
+}
+
+bool AdvancedOptionsDialog::isValid() const
+{
+    return m_isValid;
+}
+
+QString AdvancedOptionsDialog::getValidationError() const
+{
+    for (const auto& validator : m_validators) {
+        if (!validator->isValid()) {
+            return validator->getErrorMessage();
+        }
+    }
+    return QString();
+}
+
+QStringList AdvancedOptionsDialog::getValidationWarnings() const
+{
+    QStringList warnings;
+    for (const auto& validator : m_validators) {
+        QString warning = validator->getWarningMessage();
+        if (!warning.isEmpty()) {
+            warnings.append(warning);
+        }
+    }
+    return warnings;
 }

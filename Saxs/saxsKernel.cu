@@ -227,7 +227,7 @@ std::vector<std::vector<double>> saxsKernel::getSaxs()
     h_histogram = d_histogram;
     h_nhist = d_nhist;
 
-    for (auto o{1}; o < h_histogram.size(); o++)
+    for (size_t o{1}; o < h_histogram.size(); o++)
     {
         if (h_nhist[o] != 0.0f)
         {
@@ -364,12 +364,17 @@ void saxsKernel::scaledCell()
     sigma = Options::sigma;
     if (Options::nnx == 0)
     {
-        nnx = this->nnx = static_cast<int>(findClosestProduct(nx, sigma));
-        nny = this->nny = static_cast<int>(findClosestProduct(ny, sigma));
-        nnz = this->nnz = static_cast<int>(findClosestProduct(nz, sigma));
-        Options::nnx = nnx;
-        Options::nny = nny;
-        Options::nnz = nnz;
+        const int nnx_new = static_cast<int>(findClosestProduct(nx, sigma));
+        const int nny_new = static_cast<int>(findClosestProduct(ny, sigma));
+        const int nnz_new = static_cast<int>(findClosestProduct(nz, sigma));
+
+        this->nnx = nnx_new;
+        this->nny = nny_new;
+        this->nnz = nnz_new;
+
+        Options::nnx = nnx_new;
+        Options::nny = nny_new;
+        Options::nnz = nnz_new;
     }
     else
     {

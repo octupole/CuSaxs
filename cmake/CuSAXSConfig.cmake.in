@@ -1,0 +1,57 @@
+# CuSAXS CMake configuration file
+#
+# This file provides imported targets for the CuSAXS libraries.
+# After finding this package, you can use the following targets:
+#   CuSAXS::CuSAXS - Main executable target
+#   CuSAXS::utils    - Utilities library
+#   CuSAXS::system   - System library  
+#   CuSAXS::saxs     - SAXS computation library
+#   CuSAXS::exec     - Execution library
+@PACKAGE_INIT@
+# Version information
+set(CuSAXS_VERSION "@PROJECT_VERSION@")
+set(CuSAXS_VERSION_MAJOR "@PROJECT_VERSION_MAJOR@")
+set(CuSAXS_VERSION_MINOR "@PROJECT_VERSION_MINOR@")
+set(CuSAXS_VERSION_PATCH "@PROJECT_VERSION_PATCH@")
+# Find required dependencies
+include(CMakeFindDependencyMacro)
+# CUDA is required
+find_dependency(CUDAToolkit 11.0)
+if(NOT TARGET CUDA::cudart)
+    message(FATAL_ERROR "CuSAXS requires CUDA runtime")
+endif()
+# Python and pybind11 are required
+find_dependency(Python3 3.7 COMPONENTS Interpreter Development)
+find_dependency(pybind11 2.6)
+# OpenMP is required
+find_dependency(OpenMP)
+# fmt library (if not built as subdirectory)
+if(NOT TARGET fmt::fmt)
+    find_dependency(fmt 9.0)
+endif()
+# Check if all required components are available
+set(_CuSAXS_required_components utils system saxs exec)
+foreach(_comp ${_CuSAXS_required_components})
+    if(NOT TARGET CuSAXS::${_comp})
+        set(CuSAXS_${_comp}_FOUND FALSE)
+    else()
+        set(CuSAXS_${_comp}_FOUND TRUE)
+    endif()
+endforeach()
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/CuSAXSTargets.cmake")
+# Check for requested components
+if(CuSAXS_FIND_COMPONENTS)
+    foreach(_comp ${CuSAXS_FIND_COMPONENTS})
+        if(NOT CuSAXS_${_comp}_FOUND)
+            if(CuSAXS_FIND_REQUIRED_${_comp})
+                message(FATAL_ERROR "CuSAXS component ${_comp} not found")
+            else()
+                message(STATUS "CuSAXS component ${_comp} not found")
+            endif()
+        else()
+            message(STATUS "CuSAXS component ${_comp} found")
+        endif()
+    endforeach()
+endif()
+check_required_components(CuSAXS)
