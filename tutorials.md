@@ -18,18 +18,18 @@ Learn about grid sizes, interpolation orders, and other key parameters.
 
 ## Basic Usage
 
-### Command Line Interface
+### [Command Line Interface](tutorials/command-line)
 Master the CuSAXS command-line interface and common workflows.
 
-### Graphical User Interface
+### [Graphical User Interface](tutorials/gui-tutorial)
 Using the optional Qt6 GUI for parameter exploration (recommended for beginners).
 
-### Performance Optimization
+### [Performance Optimization](tutorials/performance)
 Tips for maximizing GPU utilization and managing memory.
 
 ## Advanced Topics
 
-### Custom Water Models
+### [Custom Water Models](tutorials/water-models)
 Applying corrections for different water models in your simulations.
 
 ### Ion Corrections
@@ -40,7 +40,7 @@ Choosing optimal grid sizes and scaling factors for your system.
 
 ## Analysis and Post-Processing
 
-### Python Analysis Tools
+### [Python Analysis Tools](tutorials/python-analysis)
 Using the included Python scripts for analysis and visualization.
 
 ### Comparing with Experiments
