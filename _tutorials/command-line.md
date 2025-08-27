@@ -166,6 +166,6 @@ nvidia-smi
 
 ## Next Steps
 
-- [Performance Optimization](/tutorials/performance/) - Maximize your GPU utilization
-- [Water Models Tutorial](/tutorials/water-models/) - Handle different water types
-- [Python Analysis](/tutorials/python-analysis/) - Post-process your results
+- [Performance Optimization](performance/) - Maximize your GPU utilization
+- [Water Models Tutorial](water-models/) - Handle different water types
+- [Python Analysis](python-analysis/) - Post-process your results

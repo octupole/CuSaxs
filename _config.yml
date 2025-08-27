@@ -1,6 +1,6 @@
 title: CuSAXS
 description: CUDA-accelerated Small-Angle X-ray Scattering simulation toolkit
-url: https://your-username.github.io/CuSaxs
+url: https://octupole.github.io/CuSaxs
 baseurl: /CuSaxs
 
 # Build settings
@@ -51,8 +51,8 @@ defaults:
       layout: "default"
 
 # Site settings
-author: Your Name
-email: your-email@example.com
+author: Massimo Marchi
+email: massimo@octupole.org
 github_username: your-username
 
 # Exclude from processing
