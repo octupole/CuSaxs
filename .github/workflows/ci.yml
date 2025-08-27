@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         cuda-version: ['11.8.0', '12.0.0']
@@ -56,7 +56,7 @@ jobs:
           # ctest --verbose
 
   build-gui:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -80,7 +80,7 @@ jobs:
           make -j$(nproc)
 
   code-quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
@@ -107,7 +107,7 @@ jobs:
           mypy pysrc/ --ignore-missing-imports
 
   documentation:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
