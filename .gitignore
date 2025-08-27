@@ -177,6 +177,9 @@ test_results/
 # Core dumps
 core
 core.*
+!core.h
+!core.cpp
+
 
 # Editor temporary files
 .#*
