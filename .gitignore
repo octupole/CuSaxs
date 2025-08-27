@@ -13,11 +13,6 @@ CMakeFiles/
 CMakeScripts/
 cmake_install.cmake
 Makefile
-*.cmake
-CPack*.cmake
-CTestTestfile.cmake
-FMT.build
-fmt-*.cmake
 fmt.pc
 install_manifest.txt
 Testing/
