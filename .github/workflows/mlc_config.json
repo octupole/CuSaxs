@@ -1,0 +1,22 @@
+{
+  "ignorePatterns": [
+    {
+      "pattern": "^https://github\\.com/.*/releases/tag/.*"
+    },
+    {
+      "pattern": "^https://github\\.com/.*/issues/.*"
+    },
+    {
+      "pattern": "^https://github\\.com/.*/discussions/.*"
+    },
+    {
+      "pattern": "^mailto:"
+    }
+  ],
+  "replacementPatterns": [],
+  "httpStatusCodesToRetry": [429, 503, 500, 502, 503, 504],
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "30s",
+  "aliveStatusCodes": [200, 206]
+}
