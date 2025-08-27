@@ -50,10 +50,10 @@ CuSAXS is designed for structural biology and materials science researchers who 
 
 ## Getting Started
 
-1. **[Installation Guide](about.html#installation)** - Set up CuSAXS on your system
-2. **[Basic Tutorial](tutorials/)** - Your first SAXS calculation
-3. **[API Reference](api/)** - Complete command-line options and parameters
-4. **[Python Scripts](tutorials/python-analysis.html)** - Post-processing and analysis tools
+1. **[Installation Guide](about#installation)** - Set up CuSAXS on your system
+2. **[Basic Tutorial](tutorials)** - Your first SAXS calculation
+3. **[API Reference](api)** - Complete command-line options and parameters
+4. **[Python Scripts](tutorials/python-analysis)** - Post-processing and analysis tools
 
 ## System Requirements
 
@@ -75,4 +75,4 @@ CuSAXS delivers significant speedups over CPU-based methods:
 - **Documentation**: Comprehensive guides and API reference
 - **Issues**: Report bugs or request features on [GitHub](https://github.com/your-username/CuSAXS/issues)
 - **Discussions**: Get help from the community
-- **Contributing**: We welcome contributions - see our [contributing guide](about.html#contributing)
+- **Contributing**: We welcome contributions - see our [contributing guide](about#contributing)

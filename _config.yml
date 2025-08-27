@@ -15,8 +15,8 @@ plugins:
 header_pages:
   - index.md
   - about.md
-  - tutorials/index.md
-  - api/index.md
+  - tutorials.md
+  - api.md
 
 # Collections
 collections:
