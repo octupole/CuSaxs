@@ -3,14 +3,17 @@ Optimized trajectory interface for cudaSAXS with improved pybind11 integration.
 This module provides a clean, efficient interface between C++ and Python components.
 """
 
-import numpy as np
-import MDAnalysis as mda
-import networkx as nx
-import warnings
-from typing import Dict, List, Optional, Any
+from __future__ import annotations
+
 import logging
+import warnings
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import Any, Dict, List, Optional
+
+import MDAnalysis as mda
+import networkx as nx
+import numpy as np
 import time
 
 # Configure logging
@@ -53,14 +56,24 @@ class OptimizedTrajectoryInterface:
         try:
             # Suppress MDAnalysis warnings for cleaner output
             warnings.filterwarnings(
-                "ignore", message="No coordinate reader found for", category=UserWarning
+                "ignore",
+                message="No coordinate reader found for",
+                category=UserWarning,
             )
 
-            self.tpr_file = tpr_file
-            self.xtc_file = xtc_file
-            self.universe = mda.Universe(tpr_file, xtc_file)
+            self.tpr_file: str = tpr_file
+            self.xtc_file: str = xtc_file
+            self.universe: mda.Universe = mda.Universe(tpr_file, xtc_file)
 
-            # Initialize topology analysis
+            # Will be populated during topology build
+            self.graph: nx.Graph = nx.Graph()
+            self.molecules: List[set[int]] = []
+            self.protein_molecules: List[set[int]] = []
+            self.water_molecules: List[set[int]] = []
+            self.ion_molecules: List[set[int]] = []
+            self.other_molecules: List[set[int]] = []
+
+            # Lazy caches
             self._atom_indices: Optional[Dict[str, List[int]]] = None
             self._current_frame_data: Optional[FrameData] = None
 
@@ -68,12 +81,13 @@ class OptimizedTrajectoryInterface:
             self._build_topology()
 
             logger.info(
-                f"Initialized trajectory interface: {len(self.universe.atoms)} atoms, "
-                f"{len(self.universe.trajectory)} frames"
+                "Initialized trajectory interface: %d atoms, %d frames",
+                len(self.universe.atoms),
+                len(self.universe.trajectory),
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize trajectory interface: {e}")
+            logger.error("Failed to initialize trajectory interface: %s", e)
             raise
 
     def _build_topology(self) -> None:
@@ -82,27 +96,26 @@ class OptimizedTrajectoryInterface:
             start_time = time.time()
 
             # Build connectivity graph
-            self.graph = nx.Graph()
+            self.graph.clear()
             for bond in self.universe.bonds:
                 self.graph.add_edge(bond.atoms[0].index, bond.atoms[1].index)
 
             # Find connected components (molecules)
             self.molecules = list(nx.connected_components(self.graph))
 
-            # Classify molecules
+            # Classify molecules and build indices
             self._classify_molecules()
-
-            # Build atom index mapping
             self._build_atom_indices()
 
             elapsed = time.time() - start_time
             logger.info(
-                f"Topology analysis completed in {elapsed:.2f}s: "
-                f"{len(self.molecules)} molecules identified"
+                "Topology analysis completed in %.2fs: %d molecules identified",
+                elapsed,
+                len(self.molecules),
             )
 
         except Exception as e:
-            logger.error(f"Topology building failed: {e}")
+            logger.error("Topology building failed: %s", e)
             raise
 
     def _classify_molecules(self) -> None:
@@ -118,7 +131,9 @@ class OptimizedTrajectoryInterface:
             "water": self.universe.select_atoms(
                 "resname TIP3 TIP4 SOL WAT OW"
             ).residues,
-            "ions": self.universe.select_atoms("resname NA CL K CA MG ZN").residues,
+            "ions": self.universe.select_atoms(
+                "resname NA CL K CA MG ZN"
+            ).residues,
         }
 
         for molecule in self.molecules:
@@ -136,9 +151,10 @@ class OptimizedTrajectoryInterface:
     @lru_cache(maxsize=1)
     def _build_atom_indices(self) -> Dict[str, List[int]]:
         """Build and cache atom type to index mapping."""
-        atom_indices = {}
+        # mypy: explicit type for empty dict literal
+        atom_indices: dict[str, list[int]] = {}
         for atom in self.universe.atoms:
-            element = atom.element
+            element = str(atom.element)
             if element not in atom_indices:
                 atom_indices[element] = []
             atom_indices[element].append(int(atom.index))
@@ -150,7 +166,8 @@ class OptimizedTrajectoryInterface:
         """Get atom type to index mapping."""
         if self._atom_indices is None:
             self._build_atom_indices()
-        return self._atom_indices
+        # mypy: _atom_indices guaranteed set above
+        return self._atom_indices  # type: ignore[return-value]
 
     def get_system_info(self) -> Dict[str, Any]:
         """Get comprehensive system information."""
@@ -176,33 +193,33 @@ class OptimizedTrajectoryInterface:
             FrameData object with coordinates, box, time, step
         """
         try:
-            if frame_number >= len(self.universe.trajectory):
+            nframes = len(self.universe.trajectory)
+            if frame_number >= nframes or frame_number < 0:
                 raise IndexError(
-                    f"Frame {frame_number} exceeds trajectory length "
-                    f"({len(self.universe.trajectory)})"
+                    f"Frame {frame_number} out of range (0..{nframes - 1})"
                 )
 
             # Read frame
             ts = self.universe.trajectory[frame_number]
 
             # Convert coordinates from Ångström to nm (factor 0.1)
-            coordinates = self.universe.atoms.positions * 0.1
+            coordinates = self.universe.atoms.positions * 0.1  # (N, 3) float64
 
             # Get box dimensions and convert to nm
-            box_dims = ts.triclinic_dimensions * 0.1
+            box_dims = ts.triclinic_dimensions * 0.1  # (3, 3) float64
 
-            # Create frame data
+            # Create frame data (keep float64; CUDA conversion handled later)
             self._current_frame_data = FrameData(
                 coordinates=coordinates,
                 box_dimensions=box_dims,
-                time=ts.time,
-                step=ts.frame,
+                time=float(ts.time),
+                step=int(ts.frame),
             )
 
             return self._current_frame_data
 
         except Exception as e:
-            logger.error(f"Failed to read frame {frame_number}: {e}")
+            logger.error("Failed to read frame %d: %s", frame_number, e)
             raise
 
     def read_frame_batch(self, frame_numbers: List[int]) -> List[FrameData]:
@@ -215,7 +232,7 @@ class OptimizedTrajectoryInterface:
         Returns:
             List of FrameData objects
         """
-        frames_data = []
+        frames_data: list[FrameData] = []
         for frame_num in frame_numbers:
             frames_data.append(self.read_frame(frame_num))
         return frames_data
@@ -226,7 +243,9 @@ class OptimizedTrajectoryInterface:
             raise RuntimeError("No frame data available. Call read_frame() first.")
         return self._current_frame_data.to_dict()
 
-    def preprocess_coordinates_for_cuda(self, coordinates: np.ndarray) -> np.ndarray:
+    def preprocess_coordinates_for_cuda(
+        self, coordinates: np.ndarray
+    ) -> np.ndarray:
         """
         Preprocess coordinates for CUDA kernel consumption.
 
@@ -255,7 +274,7 @@ class OptimizedTrajectoryInterface:
             "atoms_classified": len(self._atom_indices or {}) > 0,
         }
 
-        logger.info(f"Trajectory validation: {validation_results}")
+        logger.info("Trajectory validation: %s", validation_results)
         return validation_results
 
     def get_performance_stats(self) -> Dict[str, Any]:
@@ -263,17 +282,23 @@ class OptimizedTrajectoryInterface:
         return {
             "memory_usage_mb": self.universe.trajectory.memory_usage(),
             "atoms_per_molecule": (
-                len(self.universe.atoms) / len(self.molecules) if self.molecules else 0
+                len(self.universe.atoms) / len(self.molecules)
+                if self.molecules
+                else 0
             ),
-            "trajectory_size_gb": self.universe.trajectory.totaltime
-            / 1000.0,  # Rough estimate
+            # Using totaltime as a rough proxy for "size"
+            "trajectory_size_gb": self.universe.trajectory.totaltime / 1000.0,
         }
 
     def cleanup(self) -> None:
         """Clean up resources."""
         try:
             if hasattr(self, "universe") and self.universe is not None:
-                self.universe.trajectory.close()
+                try:
+                    self.universe.trajectory.close()
+                except Exception:
+                    # Some readers may not implement close()
+                    pass
                 del self.universe
 
             # Clear cached data
@@ -283,11 +308,15 @@ class OptimizedTrajectoryInterface:
             logger.info("Trajectory interface cleaned up successfully")
 
         except Exception as e:
-            logger.warning(f"Cleanup warning: {e}")
+            logger.warning("Cleanup warning: %s", e)
 
     def __del__(self):
         """Destructor to ensure cleanup."""
-        self.cleanup()
+        try:
+            self.cleanup()
+        except Exception:
+            # Avoid raising in destructor
+            pass
 
 
 # Backwards compatibility wrapper
@@ -297,20 +326,21 @@ class Topology(OptimizedTrajectoryInterface):
     def __init__(self, tpr_file: str, xtc_file: str):
         super().__init__(tpr_file, xtc_file)
         logger.warning(
-            "Using legacy Topology interface. Consider migrating to OptimizedTrajectoryInterface."
+            "Using legacy Topology interface. Consider migrating to "
+            "OptimizedTrajectoryInterface."
         )
 
     def get_atom_index(self) -> Dict[str, List[int]]:
         """Legacy method name."""
         return self.get_atom_indices()
 
-    def get_coordinates(self) -> List[List[float]]:
+    def get_coordinates(self):
         """Legacy method - returns coordinates as nested list."""
         if self._current_frame_data is None:
             raise RuntimeError("No frame loaded. Call read_frame() first.")
         return self._current_frame_data.coordinates.tolist()
 
-    def get_box(self) -> List[List[float]]:
+    def get_box(self):
         """Legacy method - returns box dimensions as nested list."""
         if self._current_frame_data is None:
             raise RuntimeError("No frame loaded. Call read_frame() first.")
@@ -320,13 +350,13 @@ class Topology(OptimizedTrajectoryInterface):
         """Legacy method - returns current frame time."""
         if self._current_frame_data is None:
             raise RuntimeError("No frame loaded. Call read_frame() first.")
-        return self._current_frame_data.time
+        return float(self._current_frame_data.time)
 
     def get_step(self) -> int:
         """Legacy method - returns current frame step."""
         if self._current_frame_data is None:
             raise RuntimeError("No frame loaded. Call read_frame() first.")
-        return self._current_frame_data.step
+        return int(self._current_frame_data.step)
 
 
 # Factory function for creating interfaces
@@ -346,8 +376,7 @@ def create_trajectory_interface(
     """
     if legacy_mode:
         return Topology(tpr_file, xtc_file)
-    else:
-        return OptimizedTrajectoryInterface(tpr_file, xtc_file)
+    return OptimizedTrajectoryInterface(tpr_file, xtc_file)
 
 
 # Module-level convenience functions
