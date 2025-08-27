@@ -131,9 +131,7 @@ class OptimizedTrajectoryInterface:
             "water": self.universe.select_atoms(
                 "resname TIP3 TIP4 SOL WAT OW"
             ).residues,
-            "ions": self.universe.select_atoms(
-                "resname NA CL K CA MG ZN"
-            ).residues,
+            "ions": self.universe.select_atoms("resname NA CL K CA MG ZN").residues,
         }
 
         for molecule in self.molecules:
@@ -243,9 +241,7 @@ class OptimizedTrajectoryInterface:
             raise RuntimeError("No frame data available. Call read_frame() first.")
         return self._current_frame_data.to_dict()
 
-    def preprocess_coordinates_for_cuda(
-        self, coordinates: np.ndarray
-    ) -> np.ndarray:
+    def preprocess_coordinates_for_cuda(self, coordinates: np.ndarray) -> np.ndarray:
         """
         Preprocess coordinates for CUDA kernel consumption.
 
@@ -282,9 +278,7 @@ class OptimizedTrajectoryInterface:
         return {
             "memory_usage_mb": self.universe.trajectory.memory_usage(),
             "atoms_per_molecule": (
-                len(self.universe.atoms) / len(self.molecules)
-                if self.molecules
-                else 0
+                len(self.universe.atoms) / len(self.molecules) if self.molecules else 0
             ),
             # Using totaltime as a rough proxy for "size"
             "trajectory_size_gb": self.universe.trajectory.totaltime / 1000.0,
