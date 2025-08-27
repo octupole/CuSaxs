@@ -38,12 +38,17 @@ defaults:
       path: ""
       type: "tutorials"
     values:
-      layout: "page"
+      layout: "default"
   - scope:
       path: ""
       type: "api"
     values:
-      layout: "page"
+      layout: "default"
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
 
 # Site settings
 author: Your Name

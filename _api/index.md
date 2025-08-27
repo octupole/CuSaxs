@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: default
 title: API Reference
 permalink: /api/
 ---
