@@ -10,26 +10,26 @@ Learn how to use CuSAXS effectively with these step-by-step guides.
 
 ## Getting Started
 
-### [Quick Start Guide](tutorials/quick-start)
+### [Quick Start Guide](/tutorials/quick-start/)
 Get up and running with your first SAXS calculation in 5 minutes.
 
-### [Understanding Parameters](tutorials/parameters) 
+### [Understanding Parameters](/tutorials/parameters/) 
 Learn about grid sizes, interpolation orders, and other key parameters.
 
 ## Basic Usage
 
-### [Command Line Interface](tutorials/command-line)
+### [Command Line Interface](/tutorials/command-line/)
 Master the CuSAXS command-line interface and common workflows.
 
-### [Graphical User Interface](tutorials/gui-tutorial)
+### [Graphical User Interface](/tutorials/gui-tutorial/)
 Using the optional Qt6 GUI for parameter exploration (recommended for beginners).
 
-### [Performance Optimization](tutorials/performance)
+### [Performance Optimization](/tutorials/performance/)
 Tips for maximizing GPU utilization and managing memory.
 
 ## Advanced Topics
 
-### [Custom Water Models](tutorials/water-models)
+### [Custom Water Models](/tutorials/water-models/)
 Applying corrections for different water models in your simulations.
 
 ### Ion Corrections
@@ -40,7 +40,7 @@ Choosing optimal grid sizes and scaling factors for your system.
 
 ## Analysis and Post-Processing
 
-### [Python Analysis Tools](tutorials/python-analysis)
+### [Python Analysis Tools](/tutorials/python-analysis/)
 Using the included Python scripts for analysis and visualization.
 
 ### Comparing with Experiments
