@@ -3,9 +3,7 @@ import argparse
 import MDAnalysis as mda
 import networkx as nx
 import sys
-import numpy as np
 from MDAnalysis.coordinates.PDB import PDBWriter
-import time
 
 
 class PDBWriterWithTitle(PDBWriter):
@@ -226,8 +224,7 @@ def main():
     print("Centered coordinates (first 5 atoms):")
     print(centered_coords[:5])
     # Write the centered structure to a PDB file
-    ##traj.write_pdb(1000, args.output)
-    exit(1)
+    # traj.write_pdb(1000, args.output)
     print(f"Centered structure written to {args.output}")
 
 

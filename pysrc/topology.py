@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Initializes the Topology class with the given TPR and XTC files, and provides methods to build a graph representation of the molecular topology, classify the molecules into different types, and read and extract information from the XTC trajectory file.
 
@@ -37,14 +38,11 @@ get_coordinates():
     Returns the coordinates for the atoms in the current frame.
 """
 
-#!/usr/bin/env python
+
 import argparse
 import MDAnalysis as mda
-from MDAnalysis.lib.formats.libmdaxdr import XTCFile
 import networkx as nx
 import sys
-import numpy as np
-import time
 import warnings
 
 
@@ -206,9 +204,8 @@ def main():
     if num_others:
         print(f"Number of other molecules: {num_others}")
 
-    atom_indesx = top.get_atom_index()
     top.read_frame(10)
-    box = top.get_box()
+
     print(top.frame.box[0])
     # for i in range(0,200,20):
     #     print(i)

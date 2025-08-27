@@ -5,14 +5,13 @@ This module provides a clean, efficient interface between C++ and Python compone
 
 import numpy as np
 import MDAnalysis as mda
-from MDAnalysis.lib.formats.libmdaxdr import XTCFile
 import networkx as nx
 import warnings
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 import logging
 from dataclasses import dataclass
 from functools import lru_cache
-
+import time
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
