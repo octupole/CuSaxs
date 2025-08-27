@@ -14,8 +14,6 @@ CMakeScripts/
 cmake_install.cmake
 Makefile
 *.cmake
-!CMakeLists.txt
-!cmake/
 CPack*.cmake
 CTestTestfile.cmake
 FMT.build
@@ -129,6 +127,10 @@ config_old.log
 *.txt
 !README.txt
 !LICENSE.txt
+!CMakeListsWrapper.txt
+!cmake/
+!CMakeLists.txt
+!**/CMakeLists.txt
 
 # Output files
 saxs_output*
