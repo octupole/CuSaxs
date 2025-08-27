@@ -1,0 +1,67 @@
+title: CuSAXS
+description: CUDA-accelerated Small-Angle X-ray Scattering simulation toolkit
+url: https://your-username.github.io/CuSaxs
+baseurl: /CuSaxs
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+
+# Navigation
+header_pages:
+  - index.md
+  - about.md
+  - tutorials/index.md
+  - api/index.md
+
+# Collections
+collections:
+  tutorials:
+    output: true
+    permalink: /:collection/:name/
+  api:
+    output: true
+    permalink: /:collection/:name/
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+  - scope:
+      path: ""
+      type: "tutorials"
+    values:
+      layout: "page"
+  - scope:
+      path: ""
+      type: "api"
+    values:
+      layout: "page"
+
+# Site settings
+author: Your Name
+email: your-email@example.com
+github_username: your-username
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - "*.cu"
+  - "*.cpp"
+  - "*.h"
+  - "*.cuh"
+  - build/
+  - cmake/
