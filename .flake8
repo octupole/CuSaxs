@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 88
+# Option A: keep E501 for code, but ignore for comments only
+# (flake8 can’t detect comments separately, so use per-file ignores OR disable E501 entirely)
+# extend-ignore = E501
+
+# Better: use Bugbear B950 (soft 90-ish limit) and disable bare E501
+extend-select = B950
+extend-ignore = E501
