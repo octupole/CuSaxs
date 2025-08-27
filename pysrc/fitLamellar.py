@@ -3,6 +3,7 @@ import argparse
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
+
 # Define the lamellar model as described in SasView
 def lamellar_model(q, scale, spacing, delta_rho, sigma, background):
     """
@@ -26,18 +27,33 @@ def lamellar_model(q, scale, spacing, delta_rho, sigma, background):
     I(q) : array
         Scattered intensity at each q value
     """
-    Pq = (2 * delta_rho * np.sin(q * spacing / 2) / (q * spacing))**2
-    Sq = np.exp(-sigma**2 * q**2 / 2)
+    Pq = (2 * delta_rho * np.sin(q * spacing / 2) / (q * spacing)) ** 2
+    Sq = np.exp(-(sigma**2) * q**2 / 2)
     Iq = scale * Pq * Sq + background
     return Iq
+
 
 # Set up argument parser
 def parse_args():
     parser = argparse.ArgumentParser(description="Fit SAXS data to the lamellar model.")
-    parser.add_argument("-f", "--file", required=True, help="Input ASCII file with experimental data (q, I(q))")
-    parser.add_argument("--plot", action="store_true", help="Plot the experimental data and fitted model")
-    parser.add_argument("--output", default="fitted_data.txt", help="Output file for saving the fitted data")
+    parser.add_argument(
+        "-f",
+        "--file",
+        required=True,
+        help="Input ASCII file with experimental data (q, I(q))",
+    )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Plot the experimental data and fitted model",
+    )
+    parser.add_argument(
+        "--output",
+        default="fitted_data.txt",
+        help="Output file for saving the fitted data",
+    )
     return parser.parse_args()
+
 
 # Load data from ASCII file
 def load_data(file):
@@ -45,6 +61,7 @@ def load_data(file):
     q_data = data[:, 0]  # First column is q
     intensity_data = data[:, 1]  # Second column is intensity
     return q_data, intensity_data
+
 
 # Main fitting function
 def fit_lamellar_model(q_data, intensity_data):
@@ -66,26 +83,33 @@ def fit_lamellar_model(q_data, intensity_data):
 
     return popt
 
+
 # Write the fitted function to a file
 def write_fitted_data(filename, popt):
     q_fitted = np.linspace(0.1, 2.0, 500)  # q values from 0.1 to 2.0 A⁻¹
     fitted_intensity = lamellar_model(q_fitted, *popt)
 
     # Save to file
-    np.savetxt(filename, np.column_stack((q_fitted, fitted_intensity)), header="q(A^-1) Fitted_I(q)")
+    np.savetxt(
+        filename,
+        np.column_stack((q_fitted, fitted_intensity)),
+        header="q(A^-1) Fitted_I(q)",
+    )
+
 
 # Plot function
 def plot_comparison(q_data, intensity_data, popt):
     fitted_intensity = lamellar_model(q_data, *popt)
 
     plt.figure()
-    plt.plot(q_data, intensity_data, 'bo', label='Experimental Data')
-    plt.plot(q_data, fitted_intensity, 'r-', label='Fitted Model')
-    plt.xlabel('q (1/Å)')
-    plt.ylabel('Intensity (a.u.)')
+    plt.plot(q_data, intensity_data, "bo", label="Experimental Data")
+    plt.plot(q_data, fitted_intensity, "r-", label="Fitted Model")
+    plt.xlabel("q (1/Å)")
+    plt.ylabel("Intensity (a.u.)")
     plt.legend()
-    plt.title('Lamellar Model Fitting')
+    plt.title("Lamellar Model Fitting")
     plt.show()
+
 
 # Main script
 if __name__ == "__main__":

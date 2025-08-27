@@ -13,7 +13,7 @@ Learn how to use CuSAXS effectively with these step-by-step guides.
 ### [Quick Start Guide](quick-start/)
 Get up and running with your first SAXS calculation in 5 minutes.
 
-### [Understanding Parameters](pparameters/) 
+### [Understanding Parameters](parameters/) 
 Learn about grid sizes, interpolation orders, and other key parameters.
 
 ### [File Formats](file-formats/)

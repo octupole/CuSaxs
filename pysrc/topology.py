@@ -36,6 +36,7 @@ get_time():
 get_coordinates():
     Returns the coordinates for the atoms in the current frame.
 """
+
 #!/usr/bin/env python
 import argparse
 import MDAnalysis as mda
@@ -53,7 +54,8 @@ class Topology:
         Initializes the MoleculeCounter with the given TPR and XTC files.
         """
         warnings.filterwarnings(
-            "ignore", message="No coordinate reader found for", category=UserWarning)
+            "ignore", message="No coordinate reader found for", category=UserWarning
+        )
         self.tpr_file = tpr_file
         self.universe = mda.Universe(tpr_file, xtc_file)
         self.G = nx.Graph()
@@ -84,16 +86,15 @@ class Topology:
         Classifies the molecules into proteins, waters, ions, and others.
         """
         # Select residues for different types of molecules
-        protein_residues = set(self.universe.select_atoms('protein').residues)
-        water_residues = set(self.universe.select_atoms(
-            'resname TIP3 TIP4 SOL WAT').residues)
-        ion_residues = set(self.universe.select_atoms(
-            'resname NA CL K CA MG').residues)
+        protein_residues = set(self.universe.select_atoms("protein").residues)
+        water_residues = set(
+            self.universe.select_atoms("resname TIP3 TIP4 SOL WAT").residues
+        )
+        ion_residues = set(self.universe.select_atoms("resname NA CL K CA MG").residues)
 
         # Classify each molecule based on its residues
         for molecule in self.molecules:
-            molecule_residues = set(
-                self.universe.atoms[list(molecule)].residues)
+            molecule_residues = set(self.universe.atoms[list(molecule)].residues)
             if molecule_residues & protein_residues:
                 self.protein_molecules.append(molecule)
             elif molecule_residues & water_residues:
@@ -102,8 +103,9 @@ class Topology:
                 self.ion_molecules.append(molecule)
             else:
                 self.other_molecules.append(molecule)
-        self.protein_atoms = self.universe.atoms[list(
-            set().union(*self.protein_molecules))]
+        self.protein_atoms = self.universe.atoms[
+            list(set().union(*self.protein_molecules))
+        ]
 
     def count_molecules(self):
         """
@@ -122,25 +124,20 @@ class Topology:
         """
         Generates a dictionary with detailed information about each molecule.
         """
-        molecule_dict = {
-            'proteins': {},
-            'waters': {},
-            'ions': {},
-            'others': {}
-        }
+        molecule_dict = {"proteins": {}, "waters": {}, "ions": {}, "others": {}}
 
         # Populate the dictionary with molecules
         for i, molecule in enumerate(self.protein_molecules):
-            molecule_dict['proteins'][f'{i}'] = list(molecule)
+            molecule_dict["proteins"][f"{i}"] = list(molecule)
 
         for i, molecule in enumerate(self.water_molecules):
-            molecule_dict['waters'][f'{i}'] = list(molecule)
+            molecule_dict["waters"][f"{i}"] = list(molecule)
 
         for i, molecule in enumerate(self.ion_molecules):
-            molecule_dict['ions'][f'{i}'] = list(molecule)
+            molecule_dict["ions"][f"{i}"] = list(molecule)
 
         for i, molecule in enumerate(self.other_molecules):
-            molecule_dict['others'][f'{i}'] = list(molecule)
+            molecule_dict["others"][f"{i}"] = list(molecule)
 
         return molecule_dict
 
@@ -158,7 +155,7 @@ class Topology:
         self.ts = self.universe.trajectory[frame_number]
 
     def get_box(self):
-        return self.ts.triclinic_dimensions/10.0
+        return self.ts.triclinic_dimensions / 10.0
 
     def get_step(self):
         return self.ts.frame
@@ -167,7 +164,7 @@ class Topology:
         return self.ts.time
 
     def get_coordinates(self):
-        return self.universe.atoms.positions/10.0
+        return self.universe.atoms.positions / 10.0
 
 
 def main():
@@ -175,11 +172,17 @@ def main():
     Main function to parse arguments and initiate molecule counting.
     """
     parser = argparse.ArgumentParser(
-        description='Read TPR and XTC files and count the number of molecules in the system.')
-    parser.add_argument('-s', '--tpr', type=str, help='Path to the TPR file')
-    parser.add_argument('-x', '--xtc', type=str, help='Path to the XTC file')
-    parser.add_argument('-o', '--output', type=str,
-                        help='Output PDB file', default='centered_structure.pdb')
+        description="Read TPR and XTC files and count the number of molecules in the system."
+    )
+    parser.add_argument("-s", "--tpr", type=str, help="Path to the TPR file")
+    parser.add_argument("-x", "--xtc", type=str, help="Path to the XTC file")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        help="Output PDB file",
+        default="centered_structure.pdb",
+    )
 
     args = parser.parse_args()
 
@@ -191,16 +194,17 @@ def main():
     # Initialize MoleculeCounter and count molecules
     top = Topology(args.tpr, args.xtc)
 
-    (num_molecules, num_proteins, num_waters,
-     num_ions, num_others) = top.count_molecules()
+    (num_molecules, num_proteins, num_waters, num_ions, num_others) = (
+        top.count_molecules()
+    )
 
     # Print the results
-    print(f'Total number of molecules: {num_molecules}')
-    print(f'Number of protein molecules: {num_proteins}')
-    print(f'Number of water molecules: {num_waters}')
-    print(f'Number of ion molecules: {num_ions}')
+    print(f"Total number of molecules: {num_molecules}")
+    print(f"Number of protein molecules: {num_proteins}")
+    print(f"Number of water molecules: {num_waters}")
+    print(f"Number of ion molecules: {num_ions}")
     if num_others:
-        print(f'Number of other molecules: {num_others}')
+        print(f"Number of other molecules: {num_others}")
 
     atom_indesx = top.get_atom_index()
     top.read_frame(10)
