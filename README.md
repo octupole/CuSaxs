@@ -225,7 +225,7 @@ cuSAXS generates several output files:
 
 ### Getting Help
 
-1. Check the [Issues](https://github.com/your-username/cuSAXS/issues) page
+1. Check the [Issues](https://github.com/octupole/cuSAXS/issues) page
 2. Verify your system meets the requirements
 3. Enable verbose output for debugging: `./CuSAXS --verbose ...`
 
@@ -273,8 +273,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Contact
 
 For questions, suggestions, or collaborations:
-- **Issues**: [GitHub Issues](https://github.com/your-username/CuSAXS/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/CuSAXS/discussions)
+- **Issues**: [GitHub Issues](https://github.com/octupole/CuSAXS/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/octupole/CuSAXS/discussions)
 
 ---
 

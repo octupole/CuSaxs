@@ -57,12 +57,12 @@ Before starting these tutorials, make sure you have:
 
 1. **CuSAXS installed** - Follow the [installation guide](about#installation)
 2. **CUDA-capable GPU** - Check requirements in [system requirements](about#system-requirements)  
-3. **Sample data** - Download tutorial datasets from [GitHub releases](https://github.com/your-username/CuSAXS/releases)
+3. **Sample data** - Download tutorial datasets from [GitHub releases](https://github.com/octupole/CuSAXS/releases)
 4. **Basic MD knowledge** - Familiarity with molecular dynamics concepts is helpful
 
 ## Getting Help
 
 If you get stuck:
 - Check the troubleshooting section
-- Search [existing issues](https://github.com/your-username/CuSAXS/issues)
-- Ask questions in [discussions](https://github.com/your-username/CuSAXS/discussions)
+- Search [existing issues](https://github.com/octupole/CuSAXS/issues)
+- Ask questions in [discussions](https://github.com/octupole/CuSAXS/discussions)

@@ -16,7 +16,7 @@ A high-performance GPU-accelerated tool for calculating Small-Angle X-ray Scatte
 Get up and running with CuSAXS in minutes:
 
 ```bash
-git clone https://github.com/your-username/CuSAXS.git
+git clone https://github.com/octupole/CuSAXS.git
 cd CuSAXS
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
