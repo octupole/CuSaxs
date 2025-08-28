@@ -2,6 +2,7 @@
 layout: page
 permalink: /about/
 ---
+## About CuSAXS
 
 CuSAXS is a computational tool designed for structural biology and materials science researchers who need to calculate SAXS intensity profiles from molecular dynamics simulations. The software leverages GPU acceleration to significantly speed up SAXS calculations while maintaining high accuracy through advanced B-spline interpolation methods.
 
