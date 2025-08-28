@@ -53,7 +53,7 @@ defaults:
 # Site settings
 author: Massimo Marchi
 email: massimo@octupole.org
-github_username: your-username
+github_username: octupole
 
 # Exclude from processing
 exclude:

@@ -73,6 +73,6 @@ CuSAXS delivers significant speedups over CPU-based methods:
 ## Community & Support
 
 - **Documentation**: Comprehensive guides and API reference
-- **Issues**: Report bugs or request features on [GitHub](https://github.com/your-username/CuSAXS/issues)
+- **Issues**: Report bugs or request features on [GitHub](https://github.com/octupole/CuSAXS/issues)
 - **Discussions**: Get help from the community
 - **Contributing**: We welcome contributions - see our [contributing guide](about#contributing)

@@ -16,7 +16,7 @@ Get up and running with CuSAXS in just a few minutes.
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/CuSAXS.git
+git clone https://github.com/octupole/CuSAXS.git
 cd CuSAXS
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release

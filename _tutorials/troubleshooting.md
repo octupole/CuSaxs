@@ -490,7 +490,7 @@ gmx check -f trajectory.xtc
 ```
 
 ### Community Support
-- **GitHub Issues**: https://github.com/your-username/CuSAXS/issues
+- **GitHub Issues**: https://github.com/octupole/CuSAXS/issues
 - **Include**: System info, error logs, minimal test case
 - **Describe**: What you expected vs what happened
 - **Provide**: Complete command line used

@@ -68,7 +68,7 @@ CuSAXS/
 
 1. **Fork and Clone**:
    ```bash
-   git clone https://github.com/your-username/CuSAXS.git
+   git clone https://github.com/octupole/CuSAXS.git
    cd CuSAXS
    git remote add upstream https://github.com/original-repo/CuSAXS.git
    ```
