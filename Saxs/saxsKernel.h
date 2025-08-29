@@ -75,6 +75,11 @@ private:
     double cudaCalls{0};
     static int frame_count;
     cufftHandle cufftPlan;
+    
+    // CUDA streams and events for async execution
+    cudaStream_t computeStream;
+    cudaEvent_t kernelCompleteEvent;
+    cudaEvent_t transferCompleteEvent;
 
     thrust::device_vector<float> d_moduleX;
     thrust::device_vector<float> d_moduleY;

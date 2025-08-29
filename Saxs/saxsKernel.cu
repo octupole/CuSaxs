@@ -140,14 +140,13 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
         int numBlocks = (numParticles + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
         //    Kernels launch for the rhoKernel
-        zeroDensityKernel<<<numBlocksGrid, THREADS_PER_BLOCK>>>(d_grid_ptr, d_grid.size());
-        cudaDeviceSynchronize();
-        // Check for errors
-        rhoCartKernel<<<numBlocks, THREADS_PER_BLOCK>>>(d_particles_ptr, d_oc_or_ptr, d_grid_ptr, order,
+        zeroDensityKernel<<<numBlocksGrid, THREADS_PER_BLOCK, 0, computeStream>>>(d_grid_ptr, d_grid.size());
+        // No sync needed - GPU will handle dependency automatically
+        rhoCartKernel<<<numBlocks, THREADS_PER_BLOCK, 0, computeStream>>>(d_particles_ptr, d_oc_or_ptr, d_grid_ptr, order,
                                                         numParticles, nx, ny, nz);
-
-        // Synchronize the device
-        cudaDeviceSynchronize();
+        
+        // Record event after rhoCartKernel completes
+        cudaEventRecord(kernelCompleteEvent, computeStream);
         // picking the padding
         float myDens = 0.0f;
         if (Options::myPadding == padding::avg)
@@ -156,11 +155,16 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
             thrust::host_vector<int> h_count = {0};
             thrust::device_vector<float> d_Dens = h_Dens;
             thrust::device_vector<int> d_count = h_count;
-            paddingKernel<<<gridDim0, blockDim>>>(d_grid_ptr, nx, ny, nz, mx, my, mz,
+            
+            // Wait for rhoCartKernel to complete before padding calculation
+            cudaEventSynchronize(kernelCompleteEvent);
+            
+            paddingKernel<<<gridDim0, blockDim, 0, computeStream>>>(d_grid_ptr, nx, ny, nz, mx, my, mz,
                                                   thrust::raw_pointer_cast(d_Dens.data()),
                                                   thrust::raw_pointer_cast(d_count.data()));
-            // Synchronize the device
-            cudaDeviceSynchronize();
+            
+            // Only sync when we need to copy data back to host
+            cudaStreamSynchronize(computeStream);
             h_Dens = d_Dens;
             h_count = d_count;
             myDens = h_Dens[0] / (float)h_count[0];
@@ -174,40 +178,43 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
         }
 
         // zeroes the Sup density grid
-        zeroDensityKernel<<<numBlocksGridSuperC, THREADS_PER_BLOCK>>>(d_gridSupC_ptr, d_gridSupC.size());
-        cudaDeviceSynchronize();
+        zeroDensityKernel<<<numBlocksGridSuperC, THREADS_PER_BLOCK, 0, computeStream>>>(d_gridSupC_ptr, d_gridSupC.size());
+        
+        // Wait for padding calculation if it was performed
+        if (Options::myPadding == padding::avg) {
+            cudaEventSynchronize(kernelCompleteEvent);
+        }
 
-        superDensityKernel<<<gridDimR, blockDim>>>(d_grid_ptr, d_gridSup_ptr, myDens, nx, ny, nz, nnx, nny, nnz);
-        // Synchronize the device
-        cudaDeviceSynchronize();
-
+        superDensityKernel<<<gridDimR, blockDim, 0, computeStream>>>(d_grid_ptr, d_gridSup_ptr, myDens, nx, ny, nz, nnx, nny, nnz);
+        
+        // Set cuFFT to use our stream
+        cufftSetStream(plan, computeStream);
         cufftExecR2C(plan, d_gridSup_ptr, d_gridSupC_ptr);
-        // Synchronize the device
-        cudaDeviceSynchronize();
 
         thrust::host_vector<float> h_nato = {0.0f};
         thrust::device_vector<float> d_nato = h_nato;
-        scatterKernel<<<gridDim, blockDim>>>(d_gridSupC_ptr, d_gridSupAcc_ptr, d_oc_ptr, d_scatter_ptr, nnx, nny, nnz, kcut, thrust::raw_pointer_cast(d_nato.data()));
-        cudaDeviceSynchronize();
+        scatterKernel<<<gridDim, blockDim, 0, computeStream>>>(d_gridSupC_ptr, d_gridSupAcc_ptr, d_oc_ptr, d_scatter_ptr, nnx, nny, nnz, kcut, thrust::raw_pointer_cast(d_nato.data()));
+        
+        // Only sync when we need the result on host
+        cudaStreamSynchronize(computeStream);
         h_nato = d_nato;
         totParticles += h_nato[0];
     }
-    modulusKernel<<<gridDim, blockDim>>>(d_gridSupAcc_ptr, d_moduleX_ptr, d_moduleY_ptr, d_moduleZ_ptr, nnx, nny, nnz);
-    // // Synchronize the device
-    cudaDeviceSynchronize();
+    modulusKernel<<<gridDim, blockDim, 0, computeStream>>>(d_gridSupAcc_ptr, d_moduleX_ptr, d_moduleY_ptr, d_moduleZ_ptr, nnx, nny, nnz);
+    
     if (Options::Simulation == "nvt")
     {
-        gridAddKernel<<<numBlocksGridIq, THREADS_PER_BLOCK>>>(d_gridSupAcc_ptr, d_Iq_ptr, d_Iq.size());
-        cudaDeviceSynchronize();
+        gridAddKernel<<<numBlocksGridIq, THREADS_PER_BLOCK, 0, computeStream>>>(d_gridSupAcc_ptr, d_Iq_ptr, d_Iq.size());
         frame_count++;
     }
     else if (Options::Simulation == "npt")
     {
-
-        calculate_histogram<<<gridDim, blockDim>>>(d_gridSupAcc_ptr, d_histogram_ptr, d_nhist_ptr, d_oc_ptr, nnx, nny, nnz,
+        calculate_histogram<<<gridDim, blockDim, 0, computeStream>>>(d_gridSupAcc_ptr, d_histogram_ptr, d_nhist_ptr, d_oc_ptr, nnx, nny, nnz,
                                                    bin_size, kcut, num_bins);
-        cudaDeviceSynchronize();
     }
+    
+    // Final synchronization before timing measurements
+    cudaStreamSynchronize(computeStream);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
 
@@ -259,6 +266,11 @@ void saxsKernel::createMemory()
     this->kcut = Options::Qcut;
 
     this->num_bins = static_cast<int>(kcut / bin_size) + 1;
+    
+    // Initialize CUDA streams and events
+    cudaStreamCreate(&computeStream);
+    cudaEventCreate(&kernelCompleteEvent);
+    cudaEventCreate(&transferCompleteEvent);
     h_histogram = thrust::host_vector<float>(num_bins, 0.0f);
     h_nhist = thrust::host_vector<long int>(num_bins, 0);
 
@@ -458,4 +470,8 @@ void saxsKernel::writeBanner()
 
 saxsKernel::~saxsKernel()
 {
+    // Cleanup CUDA resources
+    cudaStreamDestroy(computeStream);
+    cudaEventDestroy(kernelCompleteEvent);
+    cudaEventDestroy(transferCompleteEvent);
 }
