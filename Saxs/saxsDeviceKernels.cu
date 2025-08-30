@@ -19,6 +19,132 @@ __device__ float opsfact_const(float q1, int atom_type) {
            v[2] * __expf(-v[6] * q2) + v[3] * __expf(-v[7] * q2) + v[8];
 }
 
+// Warp-level reduction helper for atomic operations
+__device__ __forceinline__ float warpReduceSum(float val) {
+    #pragma unroll
+    for (int offset = warpSize/2; offset > 0; offset /= 2) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+    return val;
+}
+
+// Block-level reduction using shared memory
+template<int BLOCK_SIZE>
+__device__ __forceinline__ float blockReduceSum(float val) {
+    static __shared__ float shared[32]; // One element per warp
+    int lane = threadIdx.x % warpSize;
+    int wid = threadIdx.x / warpSize;
+    
+    // Warp-level reduction
+    val = warpReduceSum(val);
+    
+    // Write reduced value to shared memory
+    if (lane == 0) shared[wid] = val;
+    __syncthreads();
+    
+    // Read from shared memory and reduce across warps
+    val = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : 0;
+    if (wid == 0) val = warpReduceSum(val);
+    
+    return val;
+}
+
+// Optimized histogram calculation using shared memory to reduce atomics
+template<bool USE_SCALING_FACTOR, int BLOCK_SIZE>
+__global__ void calculate_histogram_optimized(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, 
+                                             float *oc, int nx, int ny, int nz,
+                                             float bin_size, float qcut, int num_bins, float fact = 1.0f)
+{
+    extern __shared__ double shared_hist[];
+    double *shared_nhist = &shared_hist[num_bins];
+    
+    int tid = threadIdx.x;
+    
+    // Initialize shared memory
+    for (int i = tid; i < num_bins; i += BLOCK_SIZE) {
+        shared_hist[i] = 0.0;
+        shared_nhist[i] = 0.0;
+    }
+    __syncthreads();
+    
+    // Calculate 3D indices from linear thread ID
+    int total_threads = gridDim.x * gridDim.y * gridDim.z * BLOCK_SIZE;
+    int global_tid = blockIdx.z * (gridDim.x * gridDim.y * BLOCK_SIZE) + 
+                     blockIdx.y * (gridDim.x * BLOCK_SIZE) + 
+                     blockIdx.x * BLOCK_SIZE + tid;
+    
+    int npz = nz / 2 + 1;
+    int total_elements = nx * ny * npz;
+    
+    // Process multiple elements per thread to improve occupancy
+    for (int elem = global_tid; elem < total_elements; elem += total_threads) {
+        int k = elem % npz;
+        int j = (elem / npz) % ny;
+        int i = elem / (npz * ny);
+        
+        if (i < nx && j < ny && k < npz) {
+            int nfx = (nx % 2 == 0) ? nx / 2 : nx / 2 + 1;
+            int nfy = (ny % 2 == 0) ? ny / 2 : ny / 2 + 1;
+            int nfz = (nz % 2 == 0) ? nz / 2 : nz / 2 + 1;
+
+            int ia = (i < nfx) ? i : i - nx;
+            int ja = (j < nfy) ? j : j - ny;
+            int ka = (k < nfz) ? k : k - nz;
+            int ib = i == 0 ? 0 : nx - i;
+            int jb = j == 0 ? 0 : ny - j;
+            
+            // Optimized vector calculation
+            float mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
+            float mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
+            float mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
+            
+            const float TWO_PI = 2.0f * M_PI;
+            mw1 *= TWO_PI;
+            mw2 *= TWO_PI;
+            mw3 *= TWO_PI;
+            
+            float mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);
+            
+            if (mw <= qcut) {
+                int h0 = static_cast<int>(mw / bin_size);
+                if (h0 < num_bins) {
+                    int idx = k + j * npz + i * npz * ny;
+                    int idbx = k + jb * npz + ib * npz * ny;
+                    
+                    double v0, nv0;
+                    if (i == 0 && j == 0 && k == 0) {
+                        v0 = d_array[idx].x;
+                        nv0 = 1.0;
+                    } else {
+                        v0 = d_array[idx].x + d_array[idbx].x;
+                        nv0 = 2.0;
+                    }
+                    
+                    // Apply scaling factor conditionally at compile time
+                    if constexpr (USE_SCALING_FACTOR) {
+                        v0 *= fact;
+                    }
+                    
+                    // Atomic operations on shared memory (much faster)
+                    atomicAdd(&shared_hist[h0], v0);
+                    atomicAdd(&shared_nhist[h0], nv0);
+                }
+            }
+        }
+    }
+    __syncthreads();
+    
+    // Reduce from shared memory to global memory
+    for (int i = tid; i < num_bins; i += BLOCK_SIZE) {
+        if (shared_hist[i] != 0.0) {
+            atomicAdd(&d_histogram[i], shared_hist[i]);
+        }
+        if (shared_nhist[i] != 0.0) {
+            atomicAdd(&d_nhist[i], shared_nhist[i]);
+        }
+    }
+}
+
 // Unified templated histogram calculation kernel
 template<bool USE_SCALING_FACTOR>
 __global__ void calculate_histogram_templated(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, 
@@ -331,6 +457,91 @@ __global__ void gridAddKernel(cuFloatComplex *grid_i, cuFloatComplex *grid_o, si
 }
 
 /**
+ * @brief Optimized density kernel using shared memory and reduced atomics.
+ * 
+ * This version groups particles by thread blocks and uses shared memory to accumulate
+ * contributions before writing to global memory, significantly reducing atomic contention.
+ */
+template<int BLOCK_SIZE>
+__global__ void rhoKernelOptimized(float *xa, float *grid, int order, int numParticles, int nx, int ny, int nz)
+{
+    extern __shared__ float shared_grid[];
+    
+    int tid = threadIdx.x;
+    int bid = blockIdx.x;
+    int particle_start = bid * BLOCK_SIZE;
+    int particle_end = min(particle_start + BLOCK_SIZE, numParticles);
+    
+    // Clear shared memory
+    for (int i = tid; i < nx * ny * nz; i += BLOCK_SIZE) {
+        shared_grid[i] = 0.0f;
+    }
+    __syncthreads();
+    
+    // Process particles assigned to this block
+    for (int idx = particle_start + tid; idx < particle_end; idx += BLOCK_SIZE) {
+        if (idx >= numParticles) break;
+        
+        Splines bsplineX, bsplineY, bsplineZ;
+        
+        int nx0 = nx, ny0 = ny, nz0 = nz;
+        float x1 = xa[idx * DIM + XX];
+        float y1 = xa[idx * DIM + YY];
+        float z1 = xa[idx * DIM + ZZ];
+        
+        float r1 = nx0 * (x1 - rint(x1 - 0.5f));
+        float s1 = ny0 * (y1 - rint(y1 - 0.5f));
+        float t1 = nz0 * (z1 - rint(z1 - 0.5f));
+        
+        int mx = static_cast<int>(r1);
+        int my = static_cast<int>(s1);
+        int mz = static_cast<int>(t1);
+        
+        float gx = r1 - static_cast<float>(mx);
+        float gy = s1 - static_cast<float>(my);
+        float gz = t1 - static_cast<float>(mz);
+        
+        spline splX = bsplineX(gx);
+        spline splY = bsplineY(gy);
+        spline splZ = bsplineZ(gz);
+        
+        // Accumulate to shared memory (reduces contention)
+        int i0 = mx - order;
+        for (int o = 0; o < order; o++) {
+            int i = i0 + (nx0 - ((i0 >= 0) ? nx0 : -nx0)) / 2;
+            float fact_o = splX.x[o];
+            
+            int j0 = my - order;
+            for (int p = 0; p < order; p++) {
+                int j = j0 + (ny0 - ((j0 >= 0) ? ny0 : -ny0)) / 2;
+                float fact_p = fact_o * splY.x[p];
+                
+                int k0 = mz - order;
+                for (int q = 0; q < order; q++) {
+                    int k = k0 + (nz0 - ((k0 >= 0) ? nz0 : -nz0)) / 2;
+                    float fact_q = fact_p * splZ.x[q];
+                    int ig = k + j * nz0 + i * nz0 * ny0;
+                    
+                    // Use atomic operations on shared memory (much faster)
+                    atomicAdd(&shared_grid[ig], fact_q);
+                    k0++;
+                }
+                j0++;
+            }
+            i0++;
+        }
+    }
+    __syncthreads();
+    
+    // Write shared memory results to global memory
+    for (int i = tid; i < nx * ny * nz; i += BLOCK_SIZE) {
+        if (shared_grid[i] != 0.0f) {
+            atomicAdd(&grid[i], shared_grid[i]);
+        }
+    }
+}
+
+/**
  * @brief Computes the density contribution of each particle to the grid.
  *
  * This kernel function calculates the density contribution of each particle to the grid
@@ -406,6 +617,96 @@ __global__ void rhoKernel(float *xa, float *grid, int order, int numParticles, i
         }
     }
 }
+/**
+ * @brief Optimized rhoCartKernel using shared memory and reduced atomics.
+ * 
+ * This version uses shared memory to accumulate density contributions before writing
+ * to global memory, significantly reducing atomic contention.
+ */
+template<int BLOCK_SIZE>
+__global__ void rhoCartKernelOptimized(float *xa, float *oc, float *grid, int order, int numParticles, int nx, int ny, int nz)
+{
+    extern __shared__ float shared_grid_cart[];
+    
+    int tid = threadIdx.x;
+    int bid = blockIdx.x;
+    int particle_start = bid * BLOCK_SIZE;
+    int particle_end = min(particle_start + BLOCK_SIZE, numParticles);
+    
+    // Clear shared memory
+    for (int i = tid; i < nx * ny * nz; i += BLOCK_SIZE) {
+        shared_grid_cart[i] = 0.0f;
+    }
+    __syncthreads();
+    
+    // Process particles assigned to this block
+    for (int idx = particle_start + tid; idx < particle_end; idx += BLOCK_SIZE) {
+        if (idx >= numParticles) break;
+        
+        Splines bsplineX, bsplineY, bsplineZ;
+        
+        int nx0 = nx, ny0 = ny, nz0 = nz;
+        float x0 = xa[idx * DIM + XX];
+        float y0 = xa[idx * DIM + YY];
+        float z0 = xa[idx * DIM + ZZ];
+        
+        // Transform coordinates
+        float x1 = oc[XX * DIM + XX] * x0 + oc[XX * DIM + YY] * y0 + oc[XX * DIM + ZZ] * z0;
+        float y1 = oc[YY * DIM + XX] * x0 + oc[YY * DIM + YY] * y0 + oc[YY * DIM + ZZ] * z0;
+        float z1 = oc[ZZ * DIM + XX] * x0 + oc[ZZ * DIM + YY] * y0 + oc[ZZ * DIM + ZZ] * z0;
+        
+        float r1 = nx0 * (x1 - rint(x1 - 0.5f));
+        float s1 = ny0 * (y1 - rint(y1 - 0.5f));
+        float t1 = nz0 * (z1 - rint(z1 - 0.5f));
+        
+        int mx = static_cast<int>(r1);
+        int my = static_cast<int>(s1);
+        int mz = static_cast<int>(t1);
+        
+        float gx = r1 - static_cast<float>(mx);
+        float gy = s1 - static_cast<float>(my);
+        float gz = t1 - static_cast<float>(mz);
+        
+        spline splX = bsplineX(gx);
+        spline splY = bsplineY(gy);
+        spline splZ = bsplineZ(gz);
+        
+        // Accumulate to shared memory (reduces contention)
+        int i0 = mx - order;
+        for (int o = 0; o < order; o++) {
+            int i = i0 + (nx0 - ((i0 >= 0) ? nx0 : -nx0)) / 2;
+            float fact_o = splX.x[o];
+            
+            int j0 = my - order;
+            for (int p = 0; p < order; p++) {
+                int j = j0 + (ny0 - ((j0 >= 0) ? ny0 : -ny0)) / 2;
+                float fact_p = fact_o * splY.x[p];
+                
+                int k0 = mz - order;
+                for (int q = 0; q < order; q++) {
+                    int k = k0 + (nz0 - ((k0 >= 0) ? nz0 : -nz0)) / 2;
+                    float fact_q = fact_p * splZ.x[q];
+                    int ig = k + j * nz0 + i * nz0 * ny0;
+                    
+                    // Use atomic operations on shared memory (much faster)
+                    atomicAdd(&shared_grid_cart[ig], fact_q);
+                    k0++;
+                }
+                j0++;
+            }
+            i0++;
+        }
+    }
+    __syncthreads();
+    
+    // Write shared memory results to global memory
+    for (int i = tid; i < nx * ny * nz; i += BLOCK_SIZE) {
+        if (shared_grid_cart[i] != 0.0f) {
+            atomicAdd(&grid[i], shared_grid_cart[i]);
+        }
+    }
+}
+
 /**
  * @brief CUDA kernel function to compute the density of particles on a 3D grid using B-spline interpolation.
  *
@@ -513,6 +814,73 @@ __global__ void superDensityKernel(float *d_grid, float *d_gridSup, float myDens
             int idx = z + y * nz + x * nz * ny;
             d_gridSup[idx_s] = d_grid[idx];
         }
+    }
+}
+
+/**
+ * @brief Optimized padding kernel using warp-level reductions and cooperative groups.
+ * 
+ * This version uses warp-level reductions to minimize atomic operations and improve performance.
+ */
+template<int BLOCK_SIZE>
+__global__ void paddingKernelOptimized(float *grid, int nx, int ny, int nz, int dx, int dy, int dz, float *Dens, int *count)
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+    int z = blockIdx.z * blockDim.z + threadIdx.z;
+    int mz = nz - dz;
+    
+    float thread_dens = 0.0f;
+    int thread_count = 0;
+    
+    if (x < nx && y < ny && z < nz) {
+        int idx = z + y * nz + x * nz * ny;
+        bool cond1 = (z > dz && z < mz);
+        
+        if (!cond1) {
+            thread_dens = grid[idx];
+            thread_count = 1;
+        }
+    }
+    
+    // Manual warp-level reduction using __shfl_down_sync
+    int warp_id = threadIdx.x / warpSize;
+    int lane_id = threadIdx.x % warpSize;
+    
+    // Warp-level reduction for density
+    #pragma unroll
+    for (int offset = warpSize/2; offset > 0; offset /= 2) {
+        thread_dens += __shfl_down_sync(0xffffffff, thread_dens, offset);
+        thread_count += __shfl_down_sync(0xffffffff, thread_count, offset);
+    }
+    
+    // Only lane 0 of each warp writes to shared memory
+    __shared__ float warp_dens[32];
+    __shared__ int warp_count[32];
+    
+    if (lane_id == 0) {
+        warp_dens[warp_id] = thread_dens;
+        warp_count[warp_id] = thread_count;
+    }
+    __syncthreads();
+    
+    // Final reduction across warps (only first warp participates)
+    if (warp_id == 0) {
+        thread_dens = (lane_id < blockDim.x / warpSize) ? warp_dens[lane_id] : 0.0f;
+        thread_count = (lane_id < blockDim.x / warpSize) ? warp_count[lane_id] : 0;
+        
+        // Final warp reduction
+        #pragma unroll
+        for (int offset = warpSize/2; offset > 0; offset /= 2) {
+            thread_dens += __shfl_down_sync(0xffffffff, thread_dens, offset);
+            thread_count += __shfl_down_sync(0xffffffff, thread_count, offset);
+        }
+    }
+    
+    // Single thread writes final result
+    if (threadIdx.x == 0) {
+        atomicAdd(Dens, thread_dens);
+        atomicAdd(count, thread_count);
     }
 }
 

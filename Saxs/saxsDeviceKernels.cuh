@@ -30,6 +30,18 @@ __global__ void rhoKernel(float *xa, float *grid, int order,
                           int numParticles, int nx, int ny, int nz);
 __global__ void rhoCartKernel(float *xa, float *oc, float *grid, int order,
                               int numParticles, int nx, int ny, int nz);
+
+// Optimized kernels with reduced atomics
+template<int BLOCK_SIZE>
+__global__ void rhoKernelOptimized(float *xa, float *grid, int order, int numParticles, int nx, int ny, int nz);
+template<int BLOCK_SIZE>
+__global__ void rhoCartKernelOptimized(float *xa, float *oc, float *grid, int order, int numParticles, int nx, int ny, int nz);
+template<bool USE_SCALING_FACTOR, int BLOCK_SIZE>
+__global__ void calculate_histogram_optimized(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, 
+                                             float *oc, int nx, int ny, int nz,
+                                             float bin_size, float qcut, int num_bins, float fact = 1.0f);
+template<int BLOCK_SIZE>
+__global__ void paddingKernelOptimized(float *grid, int nx, int ny, int nz, int dx, int dy, int dz, float *Dens, int *count);
 __global__ void superDensityKernel(float *d_grid, float *d_gridSup, float myDens,
                                    int nx, int ny, int nz, int nnx, int nny, int nnz);
 __global__ void zeroDensityKernel(float *d_grid, size_t size);
