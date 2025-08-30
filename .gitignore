@@ -13,13 +13,6 @@ CMakeFiles/
 CMakeScripts/
 cmake_install.cmake
 Makefile
-*.cmake
-!CMakeLists.txt
-!cmake/
-CPack*.cmake
-CTestTestfile.cmake
-FMT.build
-fmt-*.cmake
 fmt.pc
 install_manifest.txt
 Testing/
@@ -129,6 +122,10 @@ config_old.log
 *.txt
 !README.txt
 !LICENSE.txt
+!CMakeListsWrapper.txt
+!cmake/
+!CMakeLists.txt
+!**/CMakeLists.txt
 
 # Output files
 saxs_output*
@@ -180,6 +177,9 @@ test_results/
 # Core dumps
 core
 core.*
+!core.h
+!core.cpp
+
 
 # Editor temporary files
 .#*
