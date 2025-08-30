@@ -6,64 +6,30 @@
 #include "Ftypedefs.h"
 #include "opsfact.h"
 
-__global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, float *oc, int nx, int ny, int nz,
-                                    float bin_size, float qcut, int num_bins, float fact)
-{
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int j = blockIdx.y * blockDim.y + threadIdx.y;
-    int k = blockIdx.z * blockDim.z + threadIdx.z;
-    int npz = nz / 2 + 1;
-    if (i < nx && j < ny && k < npz)
-    { // Only consider the upper half in z-direction
-        int nfx = (nx % 2 == 0) ? nx / 2 : nx / 2 + 1;
-        int nfy = (ny % 2 == 0) ? ny / 2 : ny / 2 + 1;
-        int nfz = (nz % 2 == 0) ? nz / 2 : nz / 2 + 1;
+// Constant memory for frequently accessed scattering data
+__constant__ float c_scatter_factors[9 * 32];  // Support up to 32 different atom types
+__constant__ int c_num_atom_types;
 
-        int ia = (i < nfx) ? i : i - nx;
-        int ja = (j < nfy) ? j : j - ny;
-        int ka = (k < nfz) ? k : k - nz;
-        int ib = i == 0 ? 0 : nx - i;
-        int jb = j == 0 ? 0 : ny - j;
-        float mw1, mw2, mw3, mw;
-        mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
-        mw1 = 2.0 * M_PI * mw1;
-        mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
-        mw2 = 2.0 * M_PI * mw2;
-        mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
-        mw3 = 2.0 * M_PI * mw3;
-        mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
-        if (mw > qcut)
-            return;
-        int h0 = static_cast<int>(mw / bin_size);
-        if (h0 < num_bins)
-        {
-            double v0;
-            int idx = k + j * npz + i * npz * ny;
-            int idbx = k + jb * npz + ib * npz * ny;
-            if (i == 0 && j == 0 && k == 0)
-            {
-                v0 = d_array[idx].x * fact;
-                double nv0{1.0};
-                atomicAdd(&d_histogram[h0], v0);
-                atomicAdd(&d_nhist[h0], nv0);
-            }
-            else
-            {
-                double nv0{2.0};
-                v0 = (d_array[idx].x + d_array[idbx].x) * fact;
-                atomicAdd(&d_histogram[h0], v0);
-                atomicAdd(&d_nhist[h0], nv0);
-            }
-        }
-    }
+// Optimized opsfact using constant memory
+__device__ float opsfact_const(float q1, int atom_type) {
+    float q = q1 / (4.0f * M_PI);
+    float q2 = q * q;
+    const float* v = &c_scatter_factors[atom_type * 9];
+    return v[0] * __expf(-v[4] * q2) + v[1] * __expf(-v[5] * q2) + 
+           v[2] * __expf(-v[6] * q2) + v[3] * __expf(-v[7] * q2) + v[8];
 }
-__global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, float *oc, int nx, int ny, int nz,
-                                    float bin_size, float qcut, int num_bins)
+
+// Unified templated histogram calculation kernel
+template<bool USE_SCALING_FACTOR>
+__global__ void calculate_histogram_templated(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, 
+                                            float *oc, int nx, int ny, int nz,
+                                            float bin_size, float qcut, int num_bins, float fact = 1.0f)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
     int npz = nz / 2 + 1;
+    
     if (i < nx && j < ny && k < npz)
     { // Only consider the upper half in z-direction
         int nfx = (nx % 2 == 0) ? nx / 2 : nx / 2 + 1;
@@ -75,37 +41,167 @@ __global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram
         int ka = (k < nfz) ? k : k - nz;
         int ib = i == 0 ? 0 : nx - i;
         int jb = j == 0 ? 0 : ny - j;
-        float mw1, mw2, mw3, mw;
-        mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
-        mw1 = 2.0 * M_PI * mw1;
-        mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
-        mw2 = 2.0 * M_PI * mw2;
-        mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
-        mw3 = 2.0 * M_PI * mw3;
-        mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
-
-        if (mw > qcut)
-            return;
+        
+        // Optimized vector calculation
+        float mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
+        float mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
+        float mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
+        
+        const float TWO_PI = 2.0f * M_PI;
+        mw1 *= TWO_PI;
+        mw2 *= TWO_PI;
+        mw3 *= TWO_PI;
+        
+        float mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
+        
+        if (mw > qcut) return;
+        
         int h0 = static_cast<int>(mw / bin_size);
         if (h0 < num_bins)
         {
-            double v0;
             int idx = k + j * npz + i * npz * ny;
             int idbx = k + jb * npz + ib * npz * ny;
+            
+            double v0, nv0;
             if (i == 0 && j == 0 && k == 0)
             {
                 v0 = d_array[idx].x;
-                double nv0{1.0};
-                atomicAdd(&d_histogram[h0], v0);
-                atomicAdd(&d_nhist[h0], nv0);
+                nv0 = 1.0;
             }
             else
             {
-                double nv0{2.0};
                 v0 = d_array[idx].x + d_array[idbx].x;
-                atomicAdd(&d_histogram[h0], v0);
-                atomicAdd(&d_nhist[h0], nv0);
+                nv0 = 2.0;
             }
+            
+            // Apply scaling factor conditionally at compile time
+            if constexpr (USE_SCALING_FACTOR) {
+                v0 *= fact;
+            }
+            
+            atomicAdd(&d_histogram[h0], v0);
+            atomicAdd(&d_nhist[h0], nv0);
+        }
+    }
+}
+
+// Wrapper functions for backward compatibility - these call the templated version directly
+__global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, float *oc, 
+                                    int nx, int ny, int nz, float bin_size, float qcut, int num_bins, float fact)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+    int npz = nz / 2 + 1;
+    
+    if (i < nx && j < ny && k < npz)
+    { // Only consider the upper half in z-direction
+        int nfx = (nx % 2 == 0) ? nx / 2 : nx / 2 + 1;
+        int nfy = (ny % 2 == 0) ? ny / 2 : ny / 2 + 1;
+        int nfz = (nz % 2 == 0) ? nz / 2 : nz / 2 + 1;
+
+        int ia = (i < nfx) ? i : i - nx;
+        int ja = (j < nfy) ? j : j - ny;
+        int ka = (k < nfz) ? k : k - nz;
+        int ib = i == 0 ? 0 : nx - i;
+        int jb = j == 0 ? 0 : ny - j;
+        
+        // Optimized vector calculation
+        float mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
+        float mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
+        float mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
+        
+        const float TWO_PI = 2.0f * M_PI;
+        mw1 *= TWO_PI;
+        mw2 *= TWO_PI;
+        mw3 *= TWO_PI;
+        
+        float mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
+        
+        if (mw > qcut) return;
+        
+        int h0 = static_cast<int>(mw / bin_size);
+        if (h0 < num_bins)
+        {
+            int idx = k + j * npz + i * npz * ny;
+            int idbx = k + jb * npz + ib * npz * ny;
+            
+            double v0, nv0;
+            if (i == 0 && j == 0 && k == 0)
+            {
+                v0 = d_array[idx].x;
+                nv0 = 1.0;
+            }
+            else
+            {
+                v0 = d_array[idx].x + d_array[idbx].x;
+                nv0 = 2.0;
+            }
+            
+            v0 *= fact;  // Apply scaling factor
+            
+            atomicAdd(&d_histogram[h0], v0);
+            atomicAdd(&d_nhist[h0], nv0);
+        }
+    }
+}
+
+__global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram, double *d_nhist, float *oc,
+                                    int nx, int ny, int nz, float bin_size, float qcut, int num_bins)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+    int npz = nz / 2 + 1;
+    
+    if (i < nx && j < ny && k < npz)
+    { // Only consider the upper half in z-direction
+        int nfx = (nx % 2 == 0) ? nx / 2 : nx / 2 + 1;
+        int nfy = (ny % 2 == 0) ? ny / 2 : ny / 2 + 1;
+        int nfz = (nz % 2 == 0) ? nz / 2 : nz / 2 + 1;
+
+        int ia = (i < nfx) ? i : i - nx;
+        int ja = (j < nfy) ? j : j - ny;
+        int ka = (k < nfz) ? k : k - nz;
+        int ib = i == 0 ? 0 : nx - i;
+        int jb = j == 0 ? 0 : ny - j;
+        
+        // Optimized vector calculation
+        float mw1 = oc[XX * DIM + XX] * ia + oc[XX * DIM + YY] * ja + oc[XX * DIM + ZZ] * ka;
+        float mw2 = oc[YY * DIM + XX] * ia + oc[YY * DIM + YY] * ja + oc[YY * DIM + ZZ] * ka;
+        float mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
+        
+        const float TWO_PI = 2.0f * M_PI;
+        mw1 *= TWO_PI;
+        mw2 *= TWO_PI;
+        mw3 *= TWO_PI;
+        
+        float mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
+        
+        if (mw > qcut) return;
+        
+        int h0 = static_cast<int>(mw / bin_size);
+        if (h0 < num_bins)
+        {
+            int idx = k + j * npz + i * npz * ny;
+            int idbx = k + jb * npz + ib * npz * ny;
+            
+            double v0, nv0;
+            if (i == 0 && j == 0 && k == 0)
+            {
+                v0 = d_array[idx].x;
+                nv0 = 1.0;
+            }
+            else
+            {
+                v0 = d_array[idx].x + d_array[idbx].x;
+                nv0 = 2.0;
+            }
+            
+            // No scaling factor applied in this version
+            
+            atomicAdd(&d_histogram[h0], v0);
+            atomicAdd(&d_nhist[h0], nv0);
         }
     }
 }

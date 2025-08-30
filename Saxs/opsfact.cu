@@ -7,6 +7,9 @@
  */
 __device__ void opsfact::allocate_device(float *d_v0)
 {
+#ifdef __CUDA_ARCH__
+    #pragma unroll
+#endif
     for (int i = 0; i < 9; i++)
         v[i] = d_v0[i];
 }
@@ -17,6 +20,9 @@ __device__ void opsfact::allocate_device(float *d_v0)
  */
 __host__ __device__ void opsfact::allocate(float *d_v0)
 {
+#ifdef __CUDA_ARCH__
+    #pragma unroll
+#endif
     for (int i = 0; i < 9; i++)
         v[i] = d_v0[i];
 }

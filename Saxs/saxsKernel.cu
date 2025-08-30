@@ -39,9 +39,8 @@ void saxsKernel::getHistogram(std::vector<std::vector<float>> &oc)
 }
 void saxsKernel::zeroIq()
 {
-    const int THREADS_PER_BLOCK = 256;
-    int numBlocksGrid = (d_Iq.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
-    zeroDensityKernel<<<numBlocksGrid, THREADS_PER_BLOCK>>>(d_Iq_ptr, d_Iq.size());
+    // Use cudaMemset for better performance than custom kernel
+    cudaMemset(d_Iq_ptr, 0, d_Iq.size() * sizeof(cuFloatComplex));
 }
 // Kernel to calculate |K| values and populate the histogram
 
@@ -84,7 +83,8 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
     float *d_oc_or_ptr = thrust::raw_pointer_cast(d_oc_or.data());
     auto nnpz = nnz / 2 + 1;
 
-    dim3 blockDim(npx, npy, npz);
+    // Use optimized block dimensions
+    dim3 blockDim = optimal_block_size_3d;
 
     dim3 gridDim((nnx + blockDim.x - 1) / blockDim.x,
                  (nny + blockDim.y - 1) / blockDim.y,
@@ -95,15 +95,16 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
     dim3 gridDim0((nx + blockDim.x - 1) / blockDim.x,
                   (ny + blockDim.y - 1) / blockDim.y,
                   (nz + blockDim.z - 1) / blockDim.z);
-    const int THREADS_PER_BLOCK = 256;
+    // Use optimized 1D block size
+    const int THREADS_PER_BLOCK = optimal_block_size_1d;
     int numBlocksGrid = (d_grid.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     int numBlocksGridSuperC = (d_gridSupC.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     int numBlocksGridSuperAcc = (d_gridSupAcc.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     int numBlocksGridSuper = (d_gridSup.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
     int numBlocksGridIq = (d_Iq.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
-    // zeroes the Sup density grid
-    zeroDensityKernel<<<numBlocksGridSuperAcc, THREADS_PER_BLOCK>>>(d_gridSupAcc_ptr, d_gridSupAcc.size());
+    // zeroes the Sup density grid - using cudaMemset for better performance
+    cudaMemset(d_gridSupAcc_ptr, 0, d_gridSupAcc.size() * sizeof(cuFloatComplex));
 
     float totParticles{0};
     std::string formatted_string = fmt::format("--> Frame: {:<7}  Time Step: {:.2f} fs", frame, Time);
@@ -139,9 +140,8 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
 
         int numBlocks = (numParticles + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
-        //    Kernels launch for the rhoKernel
-        zeroDensityKernel<<<numBlocksGrid, THREADS_PER_BLOCK>>>(d_grid_ptr, d_grid.size());
-        cudaDeviceSynchronize();
+        //    Initialize grid with cudaMemset for better performance
+        cudaMemset(d_grid_ptr, 0, d_grid.size() * sizeof(float));
         // Check for errors
         rhoCartKernel<<<numBlocks, THREADS_PER_BLOCK>>>(d_particles_ptr, d_oc_or_ptr, d_grid_ptr, order,
                                                         numParticles, nx, ny, nz);
@@ -173,9 +173,8 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
             }
         }
 
-        // zeroes the Sup density grid
-        zeroDensityKernel<<<numBlocksGridSuperC, THREADS_PER_BLOCK>>>(d_gridSupC_ptr, d_gridSupC.size());
-        cudaDeviceSynchronize();
+        // zeroes the Sup density grid - using cudaMemset for better performance
+        cudaMemset(d_gridSupC_ptr, 0, d_gridSupC.size() * sizeof(cuFloatComplex));
 
         superDensityKernel<<<gridDimR, blockDim>>>(d_grid_ptr, d_gridSup_ptr, myDens, nx, ny, nz, nnx, nny, nnz);
         // Synchronize the device
@@ -475,6 +474,71 @@ void saxsKernel::writeBanner()
     std::cout << banner;
 }
 
+void saxsKernel::setupPinnedMemory()
+{
+    // Allocate pinned memory for frequently transferred data
+    // Typical maximum particles per type: 100,000
+    h_particles_size = 100000 * 3 * sizeof(float);  // x,y,z coordinates
+    h_scatter_size = 9 * sizeof(float);  // 9 scattering factors
+    
+    cudaHostAlloc(&h_particles_pinned, h_particles_size, cudaHostAllocDefault);
+    cudaHostAlloc(&h_scatter_pinned, h_scatter_size, cudaHostAllocDefault);
+}
+
+void saxsKernel::optimizeKernelLaunchParams()
+{
+    // Get device properties
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    
+    // Optimize for rhoCartKernel (most computationally intensive)
+    int minGridSize = 0, blockSize = 256;  // Initialize with defaults
+    cudaError_t err = cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, rhoCartKernel, 0, 0);
+    if (err != cudaSuccess) {
+        blockSize = 256;  // Fallback to safe default
+        std::cout << "Warning: Could not determine optimal block size, using default: " << blockSize << std::endl;
+    }
+    optimal_block_size_1d = blockSize;
+    
+    // Calculate optimal 3D block dimensions for 3D kernels
+    // Aim for ~256 threads per block for good occupancy
+    int target_threads = 256;
+    int dim_size = static_cast<int>(cbrt(target_threads));  // Cube root for 3D
+    
+    // Adjust based on GPU architecture
+    if (prop.major >= 7) {  // Volta/Turing/Ampere architecture
+        optimal_block_size_3d = dim3(16, 8, 2);  // 256 threads, optimized for memory coalescing
+    } else if (prop.major >= 6) {  // Pascal architecture
+        optimal_block_size_3d = dim3(8, 8, 4);   // 256 threads
+    } else {  // Older architectures
+        optimal_block_size_3d = dim3(8, 8, 8);   // 512 threads (older GPUs handle larger blocks better)
+    }
+    
+    // Calculate maximum theoretical occupancy
+    int temp_occupancy = 0;
+    err = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&temp_occupancy, rhoCartKernel, optimal_block_size_1d, 0);
+    if (err == cudaSuccess) {
+        max_occupancy = temp_occupancy;
+    } else {
+        max_occupancy = 1;  // Safe fallback
+    }
+    
+    std::cout << "GPU Optimization Info:" << std::endl;
+    std::cout << "  Device: " << prop.name << std::endl;
+    std::cout << "  Compute Capability: " << prop.major << "." << prop.minor << std::endl;
+    std::cout << "  Optimal 1D block size: " << optimal_block_size_1d << std::endl;
+    std::cout << "  Optimal 3D block size: " << optimal_block_size_3d.x << "x" 
+              << optimal_block_size_3d.y << "x" << optimal_block_size_3d.z << std::endl;
+    std::cout << "  Max blocks per SM: " << max_occupancy << std::endl;
+}
+
 saxsKernel::~saxsKernel()
 {
+    // Free pinned memory
+    if (h_particles_pinned) cudaFreeHost(h_particles_pinned);
+    if (h_scatter_pinned) cudaFreeHost(h_scatter_pinned);
+    
+    // Free FFT work area and destroy plan
+    if (fftWorkArea) cudaFree(fftWorkArea);
+    cufftDestroy(cufftPlan);
 }

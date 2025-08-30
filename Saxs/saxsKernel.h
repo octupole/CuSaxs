@@ -52,9 +52,21 @@ public:
     void createMemory();
     void resetHistogramParameters(std::vector<std::vector<float>> &);
     void writeBanner();
+    void setupPinnedMemory();
+    void optimizeKernelLaunchParams();
     void setcufftPlan(int nnx, int nny, int nnz)
     {
+        // Create optimized FFT plan with better performance
         cufftPlan3d(&cufftPlan, nnx, nny, nnz, CUFFT_R2C);
+        
+        // Set auto-allocation to off for better memory management
+        cufftSetAutoAllocation(cufftPlan, 0);
+        
+        // Allocate work area manually for better control
+        size_t workSize;
+        cufftGetSize(cufftPlan, &workSize);
+        cudaMalloc(&fftWorkArea, workSize);
+        cufftSetWorkArea(cufftPlan, fftWorkArea);
     }
     cufftHandle &getPlan() { return cufftPlan; }
 
@@ -64,6 +76,11 @@ private:
     int size;
     int order;
     int npx, npy, npz;
+    
+    // Optimized kernel launch parameters
+    int optimal_block_size_1d{256};
+    dim3 optimal_block_size_3d{8, 8, 8};
+    int max_occupancy{0};
     int nx, ny, nz, nnx, nny, nnz;
     int numParticles;
     float sigma;
@@ -75,6 +92,7 @@ private:
     double cudaCalls{0};
     static int frame_count;
     cufftHandle cufftPlan;
+    void *fftWorkArea{nullptr};
 
     thrust::device_vector<float> d_moduleX;
     thrust::device_vector<float> d_moduleY;
@@ -92,6 +110,12 @@ private:
     thrust::host_vector<float> h_moduleZ;
     thrust::host_vector<double> h_histogram;
     thrust::host_vector<double> h_nhist;
+    
+    // Pinned memory pointers for faster host-device transfers
+    float *h_particles_pinned{nullptr};
+    float *h_scatter_pinned{nullptr};
+    size_t h_particles_size{0};
+    size_t h_scatter_size{0};
 
     float *d_grid_ptr{nullptr};
     float *d_gridSup_ptr{nullptr};

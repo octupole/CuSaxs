@@ -10,7 +10,10 @@
 /// @param w The weight parameter for the spline initialization.
 __host__ __device__ void Splines::Init(const float w)
 {
-    // Initialize the spline
+    // Initialize the spline - unroll small loop for better performance
+#ifdef __CUDA_ARCH__
+    #pragma unroll
+#endif
     for (int i = 2; i < order; ++i)
     {
         theta.x[i] = 0.0;
@@ -35,6 +38,9 @@ __host__ __device__ void Splines::OnePass(const float w, const int k1)
         float div = 1.0 / static_cast<float>(k - 1);
 
         theta.x[k - 1] = div * w * theta.x[k - 2];
+#ifdef __CUDA_ARCH__
+        #pragma unroll
+#endif
         for (int j = 1; j <= k - 2; ++j)
         {
             theta.x[k - j - 1] = div * ((w + j) * theta.x[k - j - 2] + (k - j - w) * theta.x[k - j - 1]);
@@ -49,6 +55,9 @@ __host__ __device__ void Splines::Diff()
 {
 
     theta.dx[0] = -theta.x[0];
+#ifdef __CUDA_ARCH__
+    #pragma unroll
+#endif
     for (int o = 1; o < order; ++o)
     {
         theta.dx[o] = theta.x[o - 1] - theta.x[o];
@@ -64,6 +73,9 @@ __host__ __device__ spline Splines::operator()(const float w)
 {
 
     Init(w);
+#ifdef __CUDA_ARCH__
+    #pragma unroll
+#endif
     for (int o = 2; o < order - 1; ++o)
     {
         OnePass(w, o);
