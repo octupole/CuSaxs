@@ -54,6 +54,14 @@ public:
     void writeBanner();
     void setupPinnedMemory();
     void optimizeKernelLaunchParams();
+    void setupUnifiedMemory();
+    void cleanupUnifiedMemory();
+    void initializeMemoryPools();
+    void cleanupMemoryPools();
+    float* getPooledMemory(size_t size);
+    void returnPooledMemory(float* ptr, size_t size);
+    void initializeCudaStreams();
+    void cleanupCudaStreams();
     void setcufftPlan(int nnx, int nny, int nnz)
     {
         // Create optimized FFT plan with better performance
@@ -116,6 +124,34 @@ private:
     float *h_scatter_pinned{nullptr};
     size_t h_particles_size{0};
     size_t h_scatter_size{0};
+    
+    // Unified memory pointers for seamless CPU-GPU access
+    float *unified_particles{nullptr};
+    float *unified_scatter{nullptr};
+    double *unified_histogram{nullptr};
+    double *unified_nhist{nullptr};
+    size_t unified_particles_size{0};
+    size_t unified_histogram_size{0};
+    
+    // Memory pools for efficient allocation/deallocation
+    struct MemoryPool {
+        std::vector<float*> available_blocks;
+        std::vector<float*> allocated_blocks;
+        size_t block_size;
+        size_t total_blocks;
+        size_t allocated_count;
+    };
+    
+    std::map<size_t, MemoryPool> memory_pools;
+    std::vector<size_t> common_sizes{1024, 4096, 16384, 65536, 262144, 1048576}; // Common allocation sizes
+    
+    // CUDA streams for overlapping computation and memory transfers
+    cudaStream_t compute_stream;
+    cudaStream_t transfer_stream;
+    cudaStream_t fft_stream;
+    cudaEvent_t compute_done;
+    cudaEvent_t transfer_done;
+    cudaEvent_t fft_done;
 
     float *d_grid_ptr{nullptr};
     float *d_gridSup_ptr{nullptr};

@@ -4,6 +4,7 @@
 #include "opsfact.h"
 #include <cuda_runtime.h> // Include CUDA runtime header
 #include <cuComplex.h>
+#include <nvtx3/nvToolsExt.h>  // NVIDIA Nsight profiling
 
 #include <cufft.h>
 #include <cuComplex.h>
@@ -16,6 +17,8 @@ int saxsKernel::frame_count = 0;
 
 void saxsKernel::getHistogram(std::vector<std::vector<float>> &oc)
 {
+    nvtxRangePush("saxsKernel::getHistogram");
+    
     auto nnpz = nnz / 2 + 1;
     dim3 blockDim(npx, npy, npz);
     dim3 gridDim((nnx + blockDim.x - 1) / blockDim.x,
@@ -24,6 +27,7 @@ void saxsKernel::getHistogram(std::vector<std::vector<float>> &oc)
 
     float mySigma = (float)Options::nx / (float)Options::nnx;
 
+    nvtxRangePush("Histogram Data Preparation");
     thrust::host_vector<float> h_oc(DIM * DIM);
     for (int i = 0; i < DIM; ++i)
         for (int j = 0; j < DIM; ++j)
@@ -34,13 +38,22 @@ void saxsKernel::getHistogram(std::vector<std::vector<float>> &oc)
     float *d_oc_ptr = thrust::raw_pointer_cast(d_oc.data());
     float frames_fact = 1.0 / (float)frame_count;
     std::cout << "frames_fact: " << bin_size << " " << kcut << " " << num_bins << std::endl;
+    nvtxRangePop();
+    
+    nvtxRangePush("Histogram Calculation Kernel");
     calculate_histogram<<<gridDim, blockDim>>>(d_Iq_ptr, d_histogram_ptr, d_nhist_ptr, d_oc_ptr, nnx, nny, nnz,
                                                bin_size, kcut, num_bins, frames_fact);
+    cudaDeviceSynchronize();
+    nvtxRangePop();
+    
+    nvtxRangePop();
 }
 void saxsKernel::zeroIq()
 {
+    nvtxRangePush("saxsKernel::zeroIq");
     // Use cudaMemset for better performance than custom kernel
     cudaMemset(d_Iq_ptr, 0, d_Iq.size() * sizeof(cuFloatComplex));
+    nvtxRangePop();
 }
 // Kernel to calculate |K| values and populate the histogram
 
@@ -57,9 +70,9 @@ void saxsKernel::zeroIq()
  */
 void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float>> &coords, std::map<std::string, std::vector<int>> &index_map, std::vector<std::vector<float>> &oc)
 {
-
+    nvtxRangePush("saxsKernel::runPKernel");
+    
     // Cudaevents
-
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -104,7 +117,9 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
     int numBlocksGridIq = (d_Iq.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
     // zeroes the Sup density grid - using cudaMemset for better performance
+    nvtxRangePush("Grid Initialization");
     cudaMemset(d_gridSupAcc_ptr, 0, d_gridSupAcc.size() * sizeof(cuFloatComplex));
+    nvtxRangePop();
 
     float totParticles{0};
     std::string formatted_string = fmt::format("--> Frame: {:<7}  Time Step: {:.2f} fs", frame, Time);
@@ -117,9 +132,12 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
     auto plan = this->getPlan();
     for (const auto &pair : index_map)
     {
-
+        nvtxRangePush(("Processing particle type: " + pair.first).c_str());
+        
         std::string type = pair.first;
         std::vector<int> value = pair.second;
+        
+        nvtxRangePush("Particle Data Preparation");
         // Create a host vector to hold the particles
         thrust::host_vector<float> h_particles;
         h_particles.reserve(value.size() * 3);
@@ -134,6 +152,7 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
         // Copy the host vector to the device
         thrust::host_vector<float> h_scatter = Scattering::getScattering(type);
         thrust::device_vector<float> d_scatter = h_scatter;
+        nvtxRangePop();
 
         float *d_particles_ptr = thrust::raw_pointer_cast(d_particles.data());
         float *d_scatter_ptr = thrust::raw_pointer_cast(d_scatter.data());
@@ -143,11 +162,12 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
         //    Initialize grid with cudaMemset for better performance
         cudaMemset(d_grid_ptr, 0, d_grid.size() * sizeof(float));
         // Check for errors
+        nvtxRangePush("Density Grid Calculation");
         rhoCartKernel<<<numBlocks, THREADS_PER_BLOCK>>>(d_particles_ptr, d_oc_or_ptr, d_grid_ptr, order,
                                                         numParticles, nx, ny, nz);
-
         // Synchronize the device
         cudaDeviceSynchronize();
+        nvtxRangePop();
         // picking the padding
         float myDens = 0.0f;
         if (Options::myPadding == padding::avg)
@@ -176,36 +196,50 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
         // zeroes the Sup density grid - using cudaMemset for better performance
         cudaMemset(d_gridSupC_ptr, 0, d_gridSupC.size() * sizeof(cuFloatComplex));
 
+        nvtxRangePush("Super Density Kernel");
         superDensityKernel<<<gridDimR, blockDim>>>(d_grid_ptr, d_gridSup_ptr, myDens, nx, ny, nz, nnx, nny, nnz);
         // Synchronize the device
         cudaDeviceSynchronize();
+        nvtxRangePop();
 
+        nvtxRangePush("FFT Transform");
         cufftExecR2C(plan, d_gridSup_ptr, d_gridSupC_ptr);
         // Synchronize the device
         cudaDeviceSynchronize();
+        nvtxRangePop();
 
         thrust::host_vector<float> h_nato = {0.0f};
         thrust::device_vector<float> d_nato = h_nato;
+        nvtxRangePush("Scatter Kernel");
         scatterKernel<<<gridDim, blockDim>>>(d_gridSupC_ptr, d_gridSupAcc_ptr, d_oc_ptr, d_scatter_ptr, nnx, nny, nnz, kcut, thrust::raw_pointer_cast(d_nato.data()));
         cudaDeviceSynchronize();
+        nvtxRangePop();
+        
         h_nato = d_nato;
         totParticles += h_nato[0];
+        
+        nvtxRangePop(); // End particle type processing
     }
+    nvtxRangePush("Modulus Calculation");
     modulusKernel<<<gridDim, blockDim>>>(d_gridSupAcc_ptr, d_moduleX_ptr, d_moduleY_ptr, d_moduleZ_ptr, nnx, nny, nnz);
     // // Synchronize the device
     cudaDeviceSynchronize();
+    nvtxRangePop();
     if (Options::Simulation == "nvt")
     {
+        nvtxRangePush("Grid Addition (NVT)");
         gridAddKernel<<<numBlocksGridIq, THREADS_PER_BLOCK>>>(d_gridSupAcc_ptr, d_Iq_ptr, d_Iq.size());
         cudaDeviceSynchronize();
         frame_count++;
+        nvtxRangePop();
     }
     else if (Options::Simulation == "npt")
     {
-
+        nvtxRangePush("Histogram Calculation (NPT)");
         calculate_histogram<<<gridDim, blockDim>>>(d_gridSupAcc_ptr, d_histogram_ptr, d_nhist_ptr, d_oc_ptr, nnx, nny, nnz,
                                                    bin_size, kcut, num_bins);
         cudaDeviceSynchronize();
+        nvtxRangePop();
     }
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
@@ -219,6 +253,8 @@ void saxsKernel::runPKernel(int frame, float Time, std::vector<std::vector<float
     // Destroy the events
     cudaEventDestroy(start);
     cudaEventDestroy(stop);
+    
+    nvtxRangePop(); // End runPKernel
 }
 std::vector<std::vector<double>> saxsKernel::getSaxs()
 {
@@ -485,6 +521,223 @@ void saxsKernel::setupPinnedMemory()
     cudaHostAlloc(&h_scatter_pinned, h_scatter_size, cudaHostAllocDefault);
 }
 
+void saxsKernel::setupUnifiedMemory()
+{
+    // Allocate unified memory for data structures accessed by both CPU and GPU
+    // This allows seamless data access without explicit transfers
+    
+    // Allocate for particle coordinates (larger for multiple atom types)
+    unified_particles_size = 500000 * 3 * sizeof(float);  // x,y,z for 500k particles
+    cudaMallocManaged(&unified_particles, unified_particles_size);
+    
+    // Allocate for scattering factors (multiple atom types)
+    cudaMallocManaged(&unified_scatter, 32 * 9 * sizeof(float));  // 32 atom types, 9 factors each
+    
+    // Allocate for histogram data (frequently accessed by both CPU and GPU)
+    unified_histogram_size = 10000 * sizeof(double);  // Large histogram bins
+    cudaMallocManaged(&unified_histogram, unified_histogram_size);
+    cudaMallocManaged(&unified_nhist, unified_histogram_size);
+    
+    // Set memory access hints for better performance
+    int deviceId;
+    cudaGetDevice(&deviceId);
+    
+    // Hint that particles data is mostly accessed by GPU
+    cudaMemAdvise(unified_particles, unified_particles_size, cudaMemAdviseSetPreferredLocation, deviceId);
+    cudaMemAdvise(unified_scatter, 32 * 9 * sizeof(float), cudaMemAdviseSetPreferredLocation, deviceId);
+    
+    // Hint that histogram is accessed by both CPU and GPU
+    cudaMemAdvise(unified_histogram, unified_histogram_size, cudaMemAdviseSetAccessedBy, cudaCpuDeviceId);
+    cudaMemAdvise(unified_histogram, unified_histogram_size, cudaMemAdviseSetAccessedBy, deviceId);
+    cudaMemAdvise(unified_nhist, unified_histogram_size, cudaMemAdviseSetAccessedBy, cudaCpuDeviceId);
+    cudaMemAdvise(unified_nhist, unified_histogram_size, cudaMemAdviseSetAccessedBy, deviceId);
+    
+    std::cout << "Unified Memory initialized: " << 
+        (unified_particles_size + 32*9*sizeof(float) + 2*unified_histogram_size) / (1024*1024) 
+        << " MB allocated" << std::endl;
+}
+
+void saxsKernel::cleanupUnifiedMemory()
+{
+    if (unified_particles) {
+        cudaFree(unified_particles);
+        unified_particles = nullptr;
+    }
+    if (unified_scatter) {
+        cudaFree(unified_scatter);
+        unified_scatter = nullptr;
+    }
+    if (unified_histogram) {
+        cudaFree(unified_histogram);
+        unified_histogram = nullptr;
+    }
+    if (unified_nhist) {
+        cudaFree(unified_nhist);
+        unified_nhist = nullptr;
+    }
+}
+
+void saxsKernel::initializeMemoryPools()
+{
+    // Initialize memory pools for common allocation sizes
+    size_t total_pool_memory = 0;
+    
+    for (size_t size : common_sizes) {
+        MemoryPool& pool = memory_pools[size];
+        pool.block_size = size * sizeof(float);
+        pool.total_blocks = 64;  // Start with 64 blocks per pool
+        pool.allocated_count = 0;
+        
+        // Pre-allocate blocks
+        for (size_t i = 0; i < pool.total_blocks; ++i) {
+            float* block;
+            cudaError_t err = cudaMalloc(&block, pool.block_size);
+            if (err == cudaSuccess) {
+                pool.available_blocks.push_back(block);
+                total_pool_memory += pool.block_size;
+            } else {
+                std::cout << "Warning: Could not allocate memory pool block of size " 
+                          << pool.block_size << " bytes" << std::endl;
+                break;
+            }
+        }
+    }
+    
+    std::cout << "Memory pools initialized: " << total_pool_memory / (1024*1024) 
+              << " MB pre-allocated across " << memory_pools.size() << " pools" << std::endl;
+}
+
+void saxsKernel::cleanupMemoryPools()
+{
+    for (auto& [size, pool] : memory_pools) {
+        // Free all available blocks
+        for (float* block : pool.available_blocks) {
+            cudaFree(block);
+        }
+        
+        // Free any remaining allocated blocks
+        for (float* block : pool.allocated_blocks) {
+            cudaFree(block);
+        }
+        
+        pool.available_blocks.clear();
+        pool.allocated_blocks.clear();
+    }
+    memory_pools.clear();
+}
+
+float* saxsKernel::getPooledMemory(size_t size)
+{
+    size_t bytes_needed = size * sizeof(float);
+    
+    // Find the smallest pool that can accommodate this size
+    for (size_t pool_size : common_sizes) {
+        if (pool_size * sizeof(float) >= bytes_needed) {
+            MemoryPool& pool = memory_pools[pool_size];
+            
+            if (!pool.available_blocks.empty()) {
+                // Get block from pool
+                float* block = pool.available_blocks.back();
+                pool.available_blocks.pop_back();
+                pool.allocated_blocks.push_back(block);
+                pool.allocated_count++;
+                return block;
+            } else if (pool.allocated_count < pool.total_blocks * 2) {
+                // Pool is empty but we can allocate more
+                float* block;
+                cudaError_t err = cudaMalloc(&block, pool.block_size);
+                if (err == cudaSuccess) {
+                    pool.allocated_blocks.push_back(block);
+                    pool.allocated_count++;
+                    pool.total_blocks++;
+                    return block;
+                }
+            }
+            break;  // Found appropriate pool but no memory available
+        }
+    }
+    
+    // Fallback to regular allocation
+    float* block;
+    cudaMalloc(&block, bytes_needed);
+    return block;
+}
+
+void saxsKernel::returnPooledMemory(float* ptr, size_t size)
+{
+    if (!ptr) return;
+    
+    size_t bytes_needed = size * sizeof(float);
+    
+    // Find the appropriate pool
+    for (size_t pool_size : common_sizes) {
+        if (pool_size * sizeof(float) >= bytes_needed) {
+            MemoryPool& pool = memory_pools[pool_size];
+            
+            // Check if this pointer belongs to our pool
+            auto it = std::find(pool.allocated_blocks.begin(), pool.allocated_blocks.end(), ptr);
+            if (it != pool.allocated_blocks.end()) {
+                // Return to available pool
+                pool.allocated_blocks.erase(it);
+                pool.available_blocks.push_back(ptr);
+                return;
+            }
+            break;
+        }
+    }
+    
+    // Not from our pool, free directly
+    cudaFree(ptr);
+}
+
+void saxsKernel::initializeCudaStreams()
+{
+    nvtxRangePush("saxsKernel::initializeCudaStreams");
+    
+    // Create streams for overlapping operations
+    cudaStreamCreate(&compute_stream);
+    cudaStreamCreate(&transfer_stream);
+    cudaStreamCreate(&fft_stream);
+    
+    // Create events for synchronization
+    cudaEventCreate(&compute_done);
+    cudaEventCreate(&transfer_done);
+    cudaEventCreate(&fft_done);
+    
+    // Set stream priorities (higher priority = lower number)
+    int priority_high, priority_low;
+    cudaDeviceGetStreamPriorityRange(&priority_low, &priority_high);
+    
+    cudaStreamCreateWithPriority(&compute_stream, cudaStreamNonBlocking, priority_high);
+    cudaStreamCreateWithPriority(&fft_stream, cudaStreamNonBlocking, priority_high);
+    cudaStreamCreateWithPriority(&transfer_stream, cudaStreamNonBlocking, priority_low);
+    
+    std::cout << "CUDA Streams initialized for overlapped execution" << std::endl;
+    std::cout << "  Compute stream: High priority" << std::endl;
+    std::cout << "  FFT stream: High priority" << std::endl;
+    std::cout << "  Transfer stream: Low priority" << std::endl;
+    
+    nvtxRangePop();
+}
+
+void saxsKernel::cleanupCudaStreams()
+{
+    // Synchronize all streams before cleanup
+    cudaStreamSynchronize(compute_stream);
+    cudaStreamSynchronize(transfer_stream);
+    cudaStreamSynchronize(fft_stream);
+    
+    // Destroy streams
+    cudaStreamDestroy(compute_stream);
+    cudaStreamDestroy(transfer_stream);
+    cudaStreamDestroy(fft_stream);
+    
+    // Destroy events
+    cudaEventDestroy(compute_done);
+    cudaEventDestroy(transfer_done);
+    cudaEventDestroy(fft_done);
+}
+
 void saxsKernel::optimizeKernelLaunchParams()
 {
     // Get device properties
@@ -530,6 +783,8 @@ void saxsKernel::optimizeKernelLaunchParams()
     std::cout << "  Optimal 3D block size: " << optimal_block_size_3d.x << "x" 
               << optimal_block_size_3d.y << "x" << optimal_block_size_3d.z << std::endl;
     std::cout << "  Max blocks per SM: " << max_occupancy << std::endl;
+    
+    nvtxRangePop();
 }
 
 saxsKernel::~saxsKernel()
@@ -537,6 +792,12 @@ saxsKernel::~saxsKernel()
     // Free pinned memory
     if (h_particles_pinned) cudaFreeHost(h_particles_pinned);
     if (h_scatter_pinned) cudaFreeHost(h_scatter_pinned);
+    
+    // Free unified memory
+    cleanupUnifiedMemory();
+    
+    // Free memory pools
+    cleanupMemoryPools();
     
     // Free FFT work area and destroy plan
     if (fftWorkArea) cudaFree(fftWorkArea);

@@ -131,6 +131,7 @@ target_link_libraries(CuSAXS
         CUDA::cufft
         CUDA::cublas
         CUDA::cudart
+        CUDA::nvtx3
         fmt::fmt
         Python3::Python
         pybind11::module

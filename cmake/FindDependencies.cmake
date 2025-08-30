@@ -17,6 +17,37 @@ function(find_cuda_dependencies)
         message(FATAL_ERROR "CUBLAS not found. Please ensure CUDA Toolkit with CUBLAS is installed.")
     endif()
     
+    # Find NVTX3 for profiling (optional)
+    if(TARGET CUDA::nvtx3)
+        message(STATUS "Found NVTX3 for profiling support")
+    else()
+        # Try to find NVTX3 manually
+        find_path(NVTX3_INCLUDE_DIR nvtx3/nvToolsExt.h
+            HINTS ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+            PATH_SUFFIXES include
+        )
+        
+        if(NVTX3_INCLUDE_DIR)
+            add_library(CUDA::nvtx3 INTERFACE IMPORTED)
+            target_include_directories(CUDA::nvtx3 INTERFACE ${NVTX3_INCLUDE_DIR})
+            # On Linux, link with libnvToolsExt
+            find_library(NVTX3_LIBRARY nvToolsExt
+                HINTS ${CMAKE_CUDA_TOOLKIT_LIBRARY_ROOT}
+                PATH_SUFFIXES lib64 lib
+            )
+            if(NVTX3_LIBRARY)
+                target_link_libraries(CUDA::nvtx3 INTERFACE ${NVTX3_LIBRARY})
+                message(STATUS "Found NVTX3: ${NVTX3_INCLUDE_DIR}")
+            else()
+                message(WARNING "NVTX3 headers found but library not found. Profiling may not work.")
+            endif()
+        else()
+            message(WARNING "NVTX3 not found. Profiling markers will not be available.")
+            # Create dummy target to avoid build errors
+            add_library(CUDA::nvtx3 INTERFACE IMPORTED)
+        endif()
+    endif()
+    
     # Check if Thrust is available (should be part of CUDA Toolkit 11+)
     if(NOT TARGET CUDA::thrust)
         find_path(THRUST_INCLUDE_DIR thrust/version.h
