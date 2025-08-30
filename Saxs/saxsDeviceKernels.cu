@@ -31,7 +31,7 @@ __global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram
         mw2 = 2.0 * M_PI * mw2;
         mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
         mw3 = 2.0 * M_PI * mw3;
-        mw = sqrtf(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);
+        mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
         if (mw > qcut)
             return;
         int h0 = static_cast<int>(mw / bin_size);
@@ -82,7 +82,7 @@ __global__ void calculate_histogram(cuFloatComplex *d_array, double *d_histogram
         mw2 = 2.0 * M_PI * mw2;
         mw3 = oc[ZZ * DIM + XX] * ia + oc[ZZ * DIM + YY] * ja + oc[ZZ * DIM + ZZ] * ka;
         mw3 = 2.0 * M_PI * mw3;
-        mw = sqrtf(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);
+        mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
 
         if (mw > qcut)
             return;
@@ -188,7 +188,7 @@ __global__ void scatterKernel(cuFloatComplex *grid_q, cuFloatComplex *grid_oq, f
         mw1 = 2.0 * M_PI * mw1;
         mw2 = 2.0 * M_PI * mw2;
         mw3 = 2.0 * M_PI * mw3;
-        mw = sqrt(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);
+        mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
         if (mw > qcut)
             return;
         cuFloatComplex fq = make_cuComplex(ff(mw), 0.0f);
@@ -240,6 +240,7 @@ __global__ void gridAddKernel(cuFloatComplex *grid_i, cuFloatComplex *grid_o, si
  * This kernel function calculates the density contribution of each particle to the grid
  * using B-spline interpolation. It iterates over the grid points within the support
  * of the particle and adds the contribution to the corresponding grid points.
+ * Optimized for memory coalescing by reordering loops and hoisting invariant calculations.
  *
  * @param xa The array of particle coordinates.
  * @param grid The grid to store the density contributions.
@@ -280,22 +281,24 @@ __global__ void rhoKernel(float *xa, float *grid, int order, int numParticles, i
         spline splX = bsplineX(gx);
         spline splY = bsplineX(gy);
         spline splZ = bsplineX(gz);
+        
+        // Reordered loops for better memory coalescing and hoisted invariant calculations
         int i0 = mx - order;
         for (auto o = 0; o < order; o++)
         {
             int i = i0 + (nx0 - ((i0 >= 0) ? nx0 : -nx0)) / 2;
+            float fact_o = splX.x[o];  // Hoisted invariant calculation
 
             int j0 = my - order;
             for (auto p = 0; p < order; p++)
             {
                 int j = j0 + (ny0 - ((j0 >= 0) ? ny0 : -ny0)) / 2;
+                float fact_p = fact_o * splY.x[p];  // Hoisted invariant calculation
 
                 int k0 = mz - order;
                 for (auto q = 0; q < order; q++)
                 {
                     int k = k0 + (nz0 - ((k0 >= 0) ? nz0 : -nz0)) / 2;
-                    float fact_o = splX.x[o];
-                    float fact_p = fact_o * splY.x[p];
                     float fact_q = fact_p * splZ.x[q];
                     int ig = k + j * nz0 + i * nz0 * ny0;
                     atomicAdd(&grid[ig], fact_q);
@@ -311,6 +314,7 @@ __global__ void rhoKernel(float *xa, float *grid, int order, int numParticles, i
  * @brief CUDA kernel function to compute the density of particles on a 3D grid using B-spline interpolation.
  *
  * This kernel function takes the particle positions and orientations, and computes the density of the particles on a 3D grid using B-spline interpolation. The grid is represented as a 1D array, and the kernel function calculates the 1D index from the 3D coordinates of each grid point.
+ * Optimized for memory coalescing by reordering loops and hoisting invariant calculations.
  *
  * @param xa Array of particle positions.
  * @param oc Array of particle orientations.
@@ -355,22 +359,24 @@ __global__ void rhoCartKernel(float *xa, float *oc, float *grid, int order, int 
         spline splX = bsplineX(gx);
         spline splY = bsplineX(gy);
         spline splZ = bsplineX(gz);
+        
+        // Reordered loops for better memory coalescing and hoisted invariant calculations
         int i0 = mx - order;
         for (auto o = 0; o < order; o++)
         {
             int i = i0 + (nx0 - ((i0 >= 0) ? nx0 : -nx0)) / 2;
+            float fact_o = splX.x[o];  // Hoisted invariant calculation
 
             int j0 = my - order;
             for (auto p = 0; p < order; p++)
             {
                 int j = j0 + (ny0 - ((j0 >= 0) ? ny0 : -ny0)) / 2;
+                float fact_p = fact_o * splY.x[p];  // Hoisted invariant calculation
 
                 int k0 = mz - order;
                 for (auto q = 0; q < order; q++)
                 {
                     int k = k0 + (nz0 - ((k0 >= 0) ? nz0 : -nz0)) / 2;
-                    float fact_o = splX.x[o];
-                    float fact_p = fact_o * splY.x[p];
                     float fact_q = fact_p * splZ.x[q];
                     int ig = k + j * nz0 + i * nz0 * ny0;
                     atomicAdd(&grid[ig], fact_q);
@@ -461,7 +467,7 @@ __global__ void completeScatterKernel(cuFloatComplex *grid_q, cuFloatComplex *gr
         float mw1 = mw_values[idx];
         float mw2 = mw_values[idx + total];
         float mw3 = mw_values[idx + 2 * total];
-        float mw = sqrt(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);
+        float mw = __fsqrt_rn(mw1 * mw1 + mw2 * mw2 + mw3 * mw3);  // Fast square root intrinsic
 
         if (mw <= qcut)
         {

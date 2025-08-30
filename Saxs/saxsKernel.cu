@@ -305,19 +305,33 @@ void saxsKernel::createMemory()
 std::vector<long long> saxsKernel::generateMultiples(long long limit)
 {
     std::vector<long long> multiples;
-    for (int a = 0; std::pow(2, a) <= limit; ++a)
+    
+    // Pre-compute powers to avoid repeated std::pow calls
+    std::vector<long long> pow2, pow3, pow5, pow7;
+    for (long long p = 1; p <= limit; p *= 2) pow2.push_back(p);
+    for (long long p = 1; p <= limit; p *= 3) pow3.push_back(p);
+    for (long long p = 1; p <= limit; p *= 5) pow5.push_back(p);
+    for (long long p = 1; p <= limit; p *= 7) pow7.push_back(p);
+    
+    for (const auto& p2 : pow2)
     {
-        for (int b = 0; std::pow(2, a) * std::pow(3, b) <= limit; ++b)
+        if (p2 > limit) break;
+        for (const auto& p3 : pow3)
         {
-            for (int c = 0; std::pow(2, a) * std::pow(3, b) * std::pow(5, c) <= limit; ++c)
+            long long p23 = p2 * p3;
+            if (p23 > limit) break;
+            for (const auto& p5 : pow5)
             {
-                for (int d = 0; std::pow(2, a) * std::pow(3, b) * std::pow(5, c) * std::pow(7, d) <= limit; ++d)
+                long long p235 = p23 * p5;
+                if (p235 > limit) break;
+                for (const auto& p7 : pow7)
                 {
-                    long long multiple = std::pow(2, a) * std::pow(3, b) * std::pow(5, c) * std::pow(7, d);
+                    long long multiple = p235 * p7;
                     if (multiple <= limit)
                     {
                         multiples.push_back(multiple);
                     }
+                    else break;
                 }
             }
         }

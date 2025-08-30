@@ -62,9 +62,9 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     add_compile_options(/W4)
 endif()
 
-# CUDA compiler flags
+# CUDA compiler flags - Enhanced optimization flags for better performance
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wno-deprecated-gpu-targets")
-set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3 --use_fast_math")
+set(CMAKE_CUDA_FLAGS_RELEASE "${CMAKE_CUDA_FLAGS_RELEASE} -O3 --use_fast_math --maxrregcount=32 -Xptxas -O3")
 set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG} -G -g")
 
 # Suppress GCC extension and other warnings from NVCC
